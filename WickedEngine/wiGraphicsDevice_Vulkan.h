@@ -7,6 +7,7 @@
 
 #ifdef WICKEDENGINE_BUILD_VULKAN
 #include "Include_Vulkan.h"
+#include "wiGraphicsDevice_SharedInternals.h"
 
 #include <vector>
 #include <unordered_map>
@@ -80,15 +81,15 @@ namespace wiGraphicsTypes
 			uint32_t attachmentLayers = 0;
 			VkClearValue clearColor[9] = {};
 
-			VkPipeline pso = nullptr;
-			VkRenderPass renderPass = nullptr;
-			VkFramebuffer fbo = nullptr;
+			VkPipeline pso = VK_NULL_HANDLE;
+			VkRenderPass renderPass = VK_NULL_HANDLE;
+			VkFramebuffer fbo = VK_NULL_HANDLE;
 
 			std::unordered_map<VkPipeline, VkFramebuffer> renderPassFrameBuffers;
 
 			struct ClearRequest
 			{
-				VkImageView attachment = nullptr;
+				VkImageView attachment = VK_NULL_HANDLE;
 				VkClearValue clearValue = {};
 				uint32_t clearFlags = 0;
 			};
@@ -117,6 +118,16 @@ namespace wiGraphicsTypes
 				std::vector<VkDescriptorSet> descriptorSet_GPU[SHADERSTAGE_COUNT];
 				UINT ringOffset[SHADERSTAGE_COUNT];
 				bool dirty[SHADERSTAGE_COUNT];
+
+				// default descriptor table contents:
+				VkDescriptorBufferInfo bufferInfo[GPU_RESOURCE_HEAP_SRV_COUNT] = {};
+				VkDescriptorImageInfo imageInfo[GPU_RESOURCE_HEAP_SRV_COUNT] = {};
+				VkBufferView bufferViews[GPU_RESOURCE_HEAP_SRV_COUNT] = {};
+				VkDescriptorImageInfo samplerInfo[GPU_SAMPLER_HEAP_COUNT] = {};
+				std::vector<VkWriteDescriptorSet> initWrites[SHADERSTAGE_COUNT];
+
+				// descriptor table rename guards:
+				std::vector<wiHandle> boundDescriptors[SHADERSTAGE_COUNT];
 
 				DescriptorTableFrameAllocator(GraphicsDevice_Vulkan* device, UINT maxRenameCount);
 				~DescriptorTableFrameAllocator();

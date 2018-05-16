@@ -37,6 +37,8 @@ public:
 	wiSlider* maxParticlesSlider;
 	wiCheckBox* sortCheckBox;
 	wiCheckBox* depthCollisionsCheckBox;
+	wiCheckBox* sphCheckBox;
+	wiCheckBox* pauseCheckBox;
 	wiCheckBox* debugCheckBox;
 	wiSlider* emitCountSlider;
 	wiSlider* emitSizeSlider;
@@ -47,7 +49,13 @@ public:
 	wiSlider* emitRandomnessSlider;
 	wiSlider* emitLifeRandomnessSlider;
 	wiSlider* emitMotionBlurSlider;
+	wiSlider* emitMassSlider;
+	wiSlider* sph_h_Slider;
+	wiSlider* sph_K_Slider;
+	wiSlider* sph_p0_Slider;
+	wiSlider* sph_e_Slider;
 	wiButton* materialSelectButton;
+	wiButton* restartButton;
 
 };
 

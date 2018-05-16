@@ -2251,7 +2251,7 @@ namespace wiGraphicsTypes
 
 			UINT64 RequiredSize = 0;
 			device->GetCopyableFootprints(&desc, 0, NumSubresources, 0, nullptr, nullptr, nullptr, &RequiredSize);
-			uint8_t* dest = textureUploader->allocate(RequiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+			uint8_t* dest = textureUploader->allocate(static_cast<size_t>(RequiredSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 
 			copyQueueLock.lock();
 			UINT64 dataSize = UpdateSubresources(static_cast<ID3D12GraphicsCommandList*>(copyCommandList), (*ppTexture2D)->resource_DX12,
@@ -3253,6 +3253,8 @@ namespace wiGraphicsTypes
 	}
 	void GraphicsDevice_DX12::BindResource(SHADERSTAGE stage, GPUResource* resource, int slot, GRAPHICSTHREAD threadID, int arrayIndex)
 	{
+		assert(slot < GPU_RESOURCE_HEAP_SRV_COUNT);
+
 		if (resource != nullptr && resource->resource_DX12 != nullptr)
 		{
 			if (arrayIndex < 0)
@@ -3283,6 +3285,8 @@ namespace wiGraphicsTypes
 	}
 	void GraphicsDevice_DX12::BindUnorderedAccessResource(SHADERSTAGE stage, GPUResource* resource, int slot, GRAPHICSTHREAD threadID, int arrayIndex)
 	{
+		assert(slot < GPU_RESOURCE_HEAP_UAV_COUNT);
+
 		if (resource != nullptr && resource->resource_DX12 != nullptr)
 		{
 			if (arrayIndex < 0)
@@ -3343,6 +3347,8 @@ namespace wiGraphicsTypes
 	}
 	void GraphicsDevice_DX12::BindSampler(SHADERSTAGE stage, Sampler* sampler, int slot, GRAPHICSTHREAD threadID)
 	{
+		assert(slot < GPU_SAMPLER_HEAP_COUNT);
+
 		if (sampler != nullptr && sampler->resource_DX12 != nullptr)
 		{
 			GetFrameResources().SamplerDescriptorsGPU[threadID]->update(stage, slot,
@@ -3351,6 +3357,8 @@ namespace wiGraphicsTypes
 	}
 	void GraphicsDevice_DX12::BindConstantBuffer(SHADERSTAGE stage, GPUBuffer* buffer, int slot, GRAPHICSTHREAD threadID)
 	{
+		assert(slot < GPU_RESOURCE_HEAP_CBV_COUNT);
+
 		if (buffer != nullptr && buffer->CBV_DX12 != nullptr)
 		{
 			GetFrameResources().ResourceDescriptorsGPU[threadID]->update(stage, slot,
@@ -3748,7 +3756,7 @@ namespace wiGraphicsTypes
 
 			UINT64 RequiredSize = 0;
 			device->GetCopyableFootprints(&desc, 0, (UINT)subresources.size(), 0, nullptr, nullptr, nullptr, &RequiredSize);
-			uint8_t* dest = textureUploader->allocate(RequiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+			uint8_t* dest = textureUploader->allocate(static_cast<size_t>(RequiredSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 
 			copyQueueLock.lock();
 			UINT64 dataSize = UpdateSubresources(static_cast<ID3D12GraphicsCommandList*>(copyCommandList), (*ppTexture)->resource_DX12, 

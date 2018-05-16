@@ -24,17 +24,20 @@ public:
 private:
 	ParticleCounters debugData = {};
 	wiGraphicsTypes::GPUBuffer* debugDataReadbackBuffer;
+	wiGraphicsTypes::GPUBuffer* debugDataReadbackIndexBuffer;
+	wiGraphicsTypes::GPUBuffer* debugDataReadbackDistanceBuffer;
 
 	wiGraphicsTypes::GPUBuffer* particleBuffer;
 	wiGraphicsTypes::GPUBuffer* aliveList[2];
 	wiGraphicsTypes::GPUBuffer* deadList;
 	wiGraphicsTypes::GPUBuffer* distanceBuffer; // for sorting
+	wiGraphicsTypes::GPUBuffer* densityBuffer; // for SPH
 	wiGraphicsTypes::GPUBuffer* counterBuffer;
 	wiGraphicsTypes::GPUBuffer* indirectBuffers; // kickoffUpdate, simulation, draw, kickoffSort
 	wiGraphicsTypes::GPUBuffer* constantBuffer;
 	void CreateSelfBuffers();
 
-	static wiGraphicsTypes::ComputeShader		*kickoffUpdateCS, *emitCS, *simulateCS, *simulateCS_SORTING, *simulateCS_DEPTHCOLLISIONS, *simulateCS_SORTING_DEPTHCOLLISIONS;
+	static wiGraphicsTypes::ComputeShader		*kickoffUpdateCS, *emitCS, *sphdensityCS, *sphforceCS, *simulateCS, *simulateCS_SORTING, *simulateCS_DEPTHCOLLISIONS, *simulateCS_SORTING_DEPTHCOLLISIONS;
 	static wiGraphicsTypes::ComputeShader		*kickoffSortCS, *sortCS, *sortInnerCS, *sortStepCS;
 	static wiGraphicsTypes::GPUBuffer			*sortCB;
 	static wiGraphicsTypes::VertexShader		*vertexShader;
@@ -45,7 +48,7 @@ private:
 
 	static wiGraphicsTypes::GraphicsPSO			PSO[BLENDMODE_COUNT][PARTICLESHADERTYPE_COUNT];
 	static wiGraphicsTypes::GraphicsPSO			PSO_wire;
-	static wiGraphicsTypes::ComputePSO			CPSO_kickoffUpdate, CPSO_emit, CPSO_simulate, CPSO_simulate_SORTING, CPSO_simulate_DEPTHCOLLISIONS, CPSO_simulate_SORTING_DEPTHCOLLISIONS;
+	static wiGraphicsTypes::ComputePSO			CPSO_kickoffUpdate, CPSO_emit, CPSO_sphdensity, CPSO_sphforce, CPSO_simulate, CPSO_simulate_SORTING, CPSO_simulate_DEPTHCOLLISIONS, CPSO_simulate_SORTING_DEPTHCOLLISIONS;
 	static wiGraphicsTypes::ComputePSO			CPSO_kickoffSort, CPSO_sort, CPSO_sortInner, CPSO_sortStep;
 
 public:
@@ -69,6 +72,7 @@ public:
 
 	void Update(float dt);
 	void Burst(float num);
+	void Restart();
 
 	void UpdateRenderData(GRAPHICSTHREAD threadID);
 
@@ -77,9 +81,11 @@ public:
 
 	bool DEBUG = false;
 	ParticleCounters GetDebugData() { return debugData; }
+	bool PAUSED = false;
 
 	bool SORTING = false;
 	bool DEPTHCOLLISIONS = false;
+	bool SPH_FLUIDSIMULATION = false;
 
 	PARTICLESHADERTYPE shaderType = SOFT;
 
@@ -92,6 +98,12 @@ public:
 	float count,life,random_life;
 	float scaleX,scaleY,rotation;
 	float motionBlurAmount;
+	float mass = 1.0f;
+
+	float SPH_h = 1.0f;		// smoothing radius
+	float SPH_K = 250.0f;	// pressure constant
+	float SPH_p0 = 1.0f;	// reference density
+	float SPH_e = 0.018f;	// viscosity constant
 
 	void SetMaxParticleCount(uint32_t value);
 	uint32_t GetMaxParticleCount() const { return MAX_PARTICLES; }

@@ -25,9 +25,9 @@
 //--------------------------------------------------------------------------------------
 // Structured Buffers
 //--------------------------------------------------------------------------------------
-RWSTRUCTUREDBUFFER(counterBuffer, ParticleCounters, 4);
-RWSTRUCTUREDBUFFER(indexBuffer, uint, 2);
-RWSTRUCTUREDBUFFER(distanceBuffer, float, 6);
+STRUCTUREDBUFFER(counterBuffer, ParticleCounters, 0);
+STRUCTUREDBUFFER(distanceBuffer, float, 1);
+RWSTRUCTUREDBUFFER(indexBuffer, uint, 0);
 
 #define NumElements counterBuffer[0].aliveCount_afterSimulation
 
@@ -50,20 +50,17 @@ void main(uint3 Gid	: SV_GroupID,
 	uint index = tgp.y + index_high + index_low;
 	uint nSwapElem = tgp.y + index_high + job_params.y + job_params.z*index_low;
 
-	if (nSwapElem<tgp.y + tgp.z)
+	if (nSwapElem < tgp.y + tgp.z)
 	{
-		float a = distanceBuffer[index];
-		float b = distanceBuffer[nSwapElem];
+		uint index_a = indexBuffer[index];
+		uint index_b = indexBuffer[nSwapElem];
+		float a = distanceBuffer[index_a];
+		float b = distanceBuffer[index_b];
 
 		if (a > b)
 		{
-			distanceBuffer[index] = b;
-			distanceBuffer[nSwapElem] = a;
-
-			uint aI = indexBuffer[index];
-			uint bI = indexBuffer[nSwapElem];
-			indexBuffer[index] = bI;
-			indexBuffer[nSwapElem] = aI;
+			indexBuffer[index] = index_b;
+			indexBuffer[nSwapElem] = index_a;
 		}
 	}
 }

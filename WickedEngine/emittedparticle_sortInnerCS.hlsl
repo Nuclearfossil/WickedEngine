@@ -22,6 +22,8 @@
 
 #include "ShaderInterop_EmittedParticle.h"
 
+#define SORT_SIZE 512
+
 #if( SORT_SIZE>2048 )
 #error
 #endif
@@ -32,9 +34,9 @@
 //--------------------------------------------------------------------------------------
 // Structured Buffers
 //--------------------------------------------------------------------------------------
-RWSTRUCTUREDBUFFER(counterBuffer, ParticleCounters, 4);
-RWSTRUCTUREDBUFFER(indexBuffer, uint, 2);
-RWSTRUCTUREDBUFFER(distanceBuffer, float, 6);
+STRUCTUREDBUFFER(counterBuffer, ParticleCounters, 0);
+STRUCTUREDBUFFER(distanceBuffer, float, 1);
+RWSTRUCTUREDBUFFER(indexBuffer, uint, 0);
 
 #define NumElements counterBuffer[0].aliveCount_afterSimulation
 
@@ -58,32 +60,33 @@ void main(uint3 Gid	: SV_GroupID,
 	tgp.z = NumElements;
 	tgp.w = min(512, max(0, NumElements - Gid.x * 512));
 
-	int GlobalBaseIndex = tgp.y + tgp.x * 2 + GTid.x;
-	int LocalBaseIndex = GI;
+	uint GlobalBaseIndex = tgp.y + tgp.x * 2 + GTid.x;
+	uint LocalBaseIndex = GI;
 	uint i;
 
 	// Load shared data
-	[unroll]for (i = 0; i<2; ++i)
+	[unroll]for (i = 0; i < 2; ++i)
 	{
-		if (GI + i*NUM_THREADS < tgp.w)
+		if (GI + i * NUM_THREADS < tgp.w)
 		{
-			uint loadIndex = GlobalBaseIndex + i*NUM_THREADS;
-			g_LDS[LocalBaseIndex + i*NUM_THREADS] = float2(distanceBuffer[loadIndex], (float)indexBuffer[loadIndex]);
+			uint particleIndex = indexBuffer[GlobalBaseIndex + i * NUM_THREADS];
+			float dist = distanceBuffer[particleIndex];
+			g_LDS[LocalBaseIndex + i * NUM_THREADS] = float2(dist, (float)particleIndex);
 		}
 	}
 	GroupMemoryBarrierWithGroupSync();
 
 	// sort threadgroup shared memory
-	for (int nMergeSubSize = SORT_SIZE >> 1; nMergeSubSize>0; nMergeSubSize = nMergeSubSize >> 1)
+	for (int nMergeSubSize = SORT_SIZE >> 1; nMergeSubSize > 0; nMergeSubSize = nMergeSubSize >> 1)
 	{
 		int tmp_index = GI;
 		int index_low = tmp_index & (nMergeSubSize - 1);
 		int index_high = 2 * (tmp_index - index_low);
 		int index = index_high + index_low;
 
-		unsigned int nSwapElem = index_high + nMergeSubSize + index_low;
+		uint nSwapElem = index_high + nMergeSubSize + index_low;
 
-		if (nSwapElem<tgp.w)
+		if (nSwapElem < tgp.w)
 		{
 			float2 a = g_LDS[index];
 			float2 b = g_LDS[nSwapElem];
@@ -98,14 +101,11 @@ void main(uint3 Gid	: SV_GroupID,
 	}
 
 	// Store shared data
-	[unroll]for (i = 0; i<2; ++i)
+	[unroll]for (i = 0; i < 2; ++i)
 	{
-		if (GI + i*NUM_THREADS < tgp.w)
+		if (GI + i * NUM_THREADS < tgp.w)
 		{
-			uint loadIndex = LocalBaseIndex + i*NUM_THREADS;
-			uint storeIndex = GlobalBaseIndex + i*NUM_THREADS;
-			distanceBuffer[storeIndex] = g_LDS[loadIndex].x;
-			indexBuffer[storeIndex] = (uint)g_LDS[loadIndex].y;
+			indexBuffer[GlobalBaseIndex + i * NUM_THREADS] = (uint)g_LDS[LocalBaseIndex + i * NUM_THREADS].y;
 		}
 	}
 }
