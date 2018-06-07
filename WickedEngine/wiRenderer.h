@@ -85,7 +85,7 @@ public:
 	// NOTE: Light buffer precision seems OK when using FORMAT_R11G11B10_FLOAT format
 	// But the environmental light now also writes the AO to ALPHA so it has been changed to FORMAT_R16G16B16A16_FLOAT
 	static const wiGraphicsTypes::FORMAT RTFormat_deferred_lightbuffer = wiGraphicsTypes::FORMAT_R16G16B16A16_FLOAT;
-	static const wiGraphicsTypes::FORMAT RTFormat_lineardepth = wiGraphicsTypes::FORMAT_R32_FLOAT;
+	static const wiGraphicsTypes::FORMAT RTFormat_lineardepth = wiGraphicsTypes::FORMAT_R16_UNORM;
 	static const wiGraphicsTypes::FORMAT RTFormat_ssao = wiGraphicsTypes::FORMAT_R8_UNORM;
 	static const wiGraphicsTypes::FORMAT RTFormat_waterripple = wiGraphicsTypes::FORMAT_R8G8B8A8_SNORM;
 	static const wiGraphicsTypes::FORMAT RTFormat_normalmaps = wiGraphicsTypes::FORMAT_R8G8B8A8_SNORM;
@@ -186,6 +186,10 @@ public:
 		float    mZNearP;
 		XMFLOAT3 mUp;
 		float    mZFarP;
+		float	 mZNearP_Recip;
+		float	 mZFarP_Recip;
+		float	 mZRange;
+		float	 mZRange_Recip;
 		XMFLOAT4 mFrustumPlanesWS[6];
 	};
 	CBUFFER(CameraCB, CBSLOT_RENDERER_CAMERA)
@@ -249,7 +253,7 @@ protected:
 	
 
 
-	static bool	wireRender, debugSpheres, debugBoneLines, debugPartitionTree, debugEnvProbes, debugEmitters, debugForceFields, gridHelper, voxelHelper, advancedLightCulling, advancedRefractions;
+	static bool	wireRender, debugSpheres, debugBoneLines, debugPartitionTree, debugEnvProbes, debugEmitters, debugForceFields, debugCameras, gridHelper, voxelHelper, advancedLightCulling, advancedRefractions;
 	static bool ldsSkinningEnabled;
 	static bool requestReflectionRendering;
 
@@ -347,6 +351,8 @@ public:
 	static bool GetToDrawDebugEmitters() { return debugEmitters; }
 	static void SetToDrawDebugForceFields(bool param) { debugForceFields = param; }
 	static bool GetToDrawDebugForceFields() { return debugForceFields; }
+	static void SetToDrawDebugCameras(bool param) { debugCameras = param; }
+	static bool GetToDrawDebugCameras() { return debugCameras; }
 	static bool GetToDrawGridHelper() { return gridHelper; }
 	static void SetToDrawGridHelper(bool value) { gridHelper = value; }
 	static bool GetToDrawVoxelHelper() { return voxelHelper; }
@@ -401,6 +407,7 @@ public:
 	static Material* getMaterialByName(const std::string& get);
 	HitSphere* getSphereByName(const std::string& get);
 	static Object* getObjectByName(const std::string& name);
+	static Camera* getCameraByName(const std::string& name);
 	static Light* getLightByName(const std::string& name);
 
 	static void ReloadShaders(const std::string& path = "");
@@ -452,12 +459,13 @@ public:
 	static void UpdateGBuffer(wiGraphicsTypes::Texture2D* slot0, wiGraphicsTypes::Texture2D* slot1, wiGraphicsTypes::Texture2D* slot2, wiGraphicsTypes::Texture2D* slot3, wiGraphicsTypes::Texture2D* slot4, GRAPHICSTHREAD threadID);
 	static void UpdateDepthBuffer(wiGraphicsTypes::Texture2D* depth, wiGraphicsTypes::Texture2D* linearDepth, GRAPHICSTHREAD threadID);
 	
-	static void RenderMeshes(const XMFLOAT3& eye, const CulledCollection& culledRenderer, SHADERTYPE shaderType, UINT renderTypeFlags, GRAPHICSTHREAD threadID, bool tessellation = false, bool occlusionCulling = false);
+	static void RenderMeshes(const XMFLOAT3& eye, const CulledCollection& culledRenderer, SHADERTYPE shaderType, UINT renderTypeFlags, GRAPHICSTHREAD threadID, 
+		bool tessellation = false, bool occlusionCulling = false, uint32_t layerMask = 0xFFFFFFFF);
 	static void DrawSky(GRAPHICSTHREAD threadID);
 	static void DrawSun(GRAPHICSTHREAD threadID);
-	static void DrawWorld(Camera* camera, bool tessellation, GRAPHICSTHREAD threadID, SHADERTYPE shaderType, bool grass, bool occlusionCulling);
-	static void DrawForShadowMap(GRAPHICSTHREAD threadID);
-	static void DrawWorldTransparent(Camera* camera, SHADERTYPE shaderType, GRAPHICSTHREAD threadID, bool grass, bool occlusionCulling);
+	static void DrawWorld(Camera* camera, bool tessellation, GRAPHICSTHREAD threadID, SHADERTYPE shaderType, bool grass, bool occlusionCulling, uint32_t layerMask = 0xFFFFFFFF);
+	static void DrawForShadowMap(GRAPHICSTHREAD threadID, uint32_t layerMask = 0xFFFFFFFF);
+	static void DrawWorldTransparent(Camera* camera, SHADERTYPE shaderType, GRAPHICSTHREAD threadID, bool grass, bool occlusionCulling, uint32_t layerMask = 0xFFFFFFFF);
 	void DrawDebugSpheres(Camera* camera, GRAPHICSTHREAD threadID);
 	static void DrawDebugBoneLines(Camera* camera, GRAPHICSTHREAD threadID);
 	static void DrawDebugLines(Camera* camera, GRAPHICSTHREAD threadID);
@@ -468,6 +476,7 @@ public:
 	static void DrawDebugVoxels(Camera* camera, GRAPHICSTHREAD threadID);
 	static void DrawDebugEmitters(Camera* camera, GRAPHICSTHREAD threadID);
 	static void DrawDebugForceFields(Camera* camera, GRAPHICSTHREAD threadID);
+	static void DrawDebugCameras(Camera* camera, GRAPHICSTHREAD threadID);
 	static void DrawSoftParticles(Camera* camera, bool distortion, GRAPHICSTHREAD threadID);
 	static void DrawTrails(GRAPHICSTHREAD threadID, wiGraphicsTypes::Texture2D* refracRes);
 	static void DrawImagesAdd(GRAPHICSTHREAD threadID, wiGraphicsTypes::Texture2D* refracRes);
@@ -511,7 +520,6 @@ public:
 	static int getVisibleObjectCount(){return visibleCount;}
 	static void resetVisibleObjectCount(){visibleCount=0;}
 
-	static void FinishLoading();
 	static wiSPTree* spTree;
 	static wiSPTree* spTree_lights;
 
@@ -546,6 +554,7 @@ public:
 		Decal* decal;
 		EnvironmentProbe* envProbe;
 		ForceField* forceField;
+		Camera* camera;
 		XMFLOAT3 position,normal;
 		float distance;
 		int subsetIndex;
@@ -564,7 +573,8 @@ public:
 				light == other.light &&
 				decal == other.decal &&
 				envProbe == other.envProbe &&
-				forceField == other.forceField
+				forceField == other.forceField &&
+				camera == other.camera
 				;
 		}
 		void Clear()
@@ -577,18 +587,19 @@ public:
 			SAFE_INIT(decal);
 			SAFE_INIT(envProbe);
 			SAFE_INIT(forceField);
+			SAFE_INIT(camera);
 		}
 	};
 
 	// Pick closest object in the world
-	// pickType: PICKTYPE enum values ocncatenated with | operator
+	// pickType: PICKTYPE enum values concatenated with | operator
 	// layer : concatenated string of layers to check against, empty string : all layers will be checked
 	// layerDisable : concatenated string of layers to NOT check against
-	static Picked Pick(long cursorX, long cursorY, int pickType = PICK_OPAQUE, const std::string& layer = "", const std::string& layerDisable = "");
-	static Picked Pick(RAY& ray, int pickType = PICK_OPAQUE, const std::string& layer = "", const std::string& layerDisable = "");
+	static Picked Pick(long cursorX, long cursorY, int pickType = PICK_OPAQUE, uint32_t layerMask = 0xFFFFFFFF);
+	static Picked Pick(RAY& ray, int pickType = PICK_OPAQUE, uint32_t layerMask = 0xFFFFFFFF);
 	static RAY getPickRay(long cursorX, long cursorY);
 	static void RayIntersectMeshes(const RAY& ray, const CulledList& culledObjects, std::vector<Picked>& points,
-		int pickType = PICK_OPAQUE, bool dynamicObjects = true, const std::string& layer = "", const std::string& layerDisable = "", bool onlyVisible = false);
+		int pickType = PICK_OPAQUE, bool dynamicObjects = true, bool onlyVisible = false, uint32_t layerMask = 0xFFFFFFFF);
 	static void CalculateVertexAO(Object* object);
 
 	static PHYSICS* physicsEngine;
@@ -598,7 +609,7 @@ public:
 	static void SetOceanEnabled(bool enabled, const wiOceanParameter& params);
 	static wiOcean* GetOcean() { return ocean; }
 
-	static Model* LoadModel(const std::string& fileName, const XMMATRIX& transform = XMMatrixIdentity(), const std::string& ident = "common");
+	static Model* LoadModel(const std::string& fileName, const XMMATRIX& transform = XMMatrixIdentity());
 	static void LoadWorldInfo(const std::string& fileName);
 	static void LoadDefaultLighting();
 
@@ -622,6 +633,8 @@ public:
 	static void Add(Light* value);
 	// Add Force Field Instance
 	static void Add(ForceField* value);
+	// Add Camera Instance
+	static void Add(Camera* value);
 
 	// Remove from the scene
 	static void Remove(Object* value);
@@ -629,5 +642,6 @@ public:
 	static void Remove(Decal* value);
 	static void Remove(EnvironmentProbe* value);
 	static void Remove(ForceField* value);
+	static void Remove(Camera* value);
 };
 

@@ -6,6 +6,7 @@ class wiWindow;
 class wiLabel;
 class wiCheckBox;
 class wiSlider;
+class wiTextInputField;
 
 class CameraWindow
 {
@@ -15,10 +16,10 @@ public:
 
 	void ResetCam();
 
-	bool fpscamera; 
+	Camera* proxy = nullptr;
+	void SetProxy(Camera* camera);
+
 	Transform* orbitalCamTarget;
-	float movespeed;
-	float rotationspeed;
 
 	wiGUI* GUI;
 
@@ -30,5 +31,10 @@ public:
 	wiSlider* rotationspeedSlider;
 	wiButton* resetButton;
 	wiCheckBox* fpsCheckBox;
+
+	wiButton* proxyButton;
+	wiTextInputField* proxyNameField;
+	wiCheckBox* followCheckBox;
+	wiSlider* followSlider;
 };
 

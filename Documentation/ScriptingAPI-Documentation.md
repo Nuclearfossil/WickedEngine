@@ -64,13 +64,15 @@ This section describes the common tools for scripting which are not necessarily 
 - signal(string name)
 - waitSignal(string name)
 - runProcess(function func)
+- killProcesses()
 - waitSeconds(float seconds)
 - getprops(table object)
 - len(table object)
 - backlog_post_list(table list)
 - fixedupdate()
 - update()
-- render()
+- render() 
+- getDeltaTime()
 - math.lerp(float a,b,t)
 - math.clamp(float x,min,max)
 - math.saturate(float x)
@@ -112,10 +114,11 @@ You can use the Renderer with the following functions, all of which are in the g
 - GetScreenHeight() : float result
 - GetRenderWidth() : float result
 - GetRenderHeight(): float result
-- GetCamera() : Camera? result
-- LoadModel(string fileName, opt string identifier, opt Matrix transform) : Model? result
-- LoadWorldInfo(string fileName)
-- FinishLoading()
+- GetCameras() : string result
+- GetCamera(opt String name) : Camera result		-- If string is provided, it will search a camera by name, otherwise, returns the main camera
+- LoadModel(string fileName, opt Matrix transform) : Model? result		-- Returns the model that was loaded
+- LoadWorldInfo(string fileName)		-- Loads world information from file
+- DuplicateInstance(Object object) : Object result		-- Copies the specified object in the scene as an instanced mesh
 - SetEnvironmentMap(Texture cubemap)
 - SetColorGrading(Texture texture2D)
 - HairParticleSettings(opt int lod0, opt int lod1, opt int lod2)
@@ -129,7 +132,7 @@ You can use the Renderer with the following functions, all of which are in the g
 - SetVSyncEnabled(opt bool enabled)
 - SetOcclusionCullingEnabled(bool enabled)
 - SetPhysicsParams(opt bool rigidBodyPhysicsEnabled, opt bool softBodyPhysicsEnabled, opt int softBodyIterationCount)
-- Pick(Ray ray, opt PICKTYPE pickType, opt string id="", opt string disableID="") : Object? object, Vector position,normal, float distance
+- Pick(Ray ray, opt PICKTYPE pickType, opt uint layerMask) : Object? object, Vector position,normal, float distance		-- Perform ray-picking in the scene. pickType is a bitmask specifying object types to check against. layerMask is a bitmask specifying which layers to check against
 - DrawLine(Vector origin,end, opt Vector color)
 - PutWaterRipple(String imagename, Vector position)
 - PutDecal(Decal decal)
@@ -282,6 +285,8 @@ A four component floating point vector. Provides efficient calculations with SIM
 - Add(Vector v1,v2) : Vector result
 - Subtract(Vector v1,v2) : Vector result
 - Multiply(Vector v1,v2) : Vector result
+- Multiply(Vector v1, float f) : Vector result
+- Multiply(float f, Vector v1) : Vector result
 - Dot(Vector v1,v2) : Vector result
 - Cross(Vector v1,v2) : Vector result
 - Lerp(Vector v1,v2, float t) : Vector result
@@ -315,6 +320,8 @@ The basic entity in the scene. It has a name.
 - [constructor]Node()
 - GetName() : string
 - SetName(string name)
+- SetLayerMask(uint value)
+- GetLayerMask() : uint result
 
 #### Transform
 Everything in the scene is a transform. It defines a point in the space by location, size, and rotation.
@@ -326,6 +333,8 @@ It inherits functions from Node.
 - Scale(Vector vector)
 - Rotate(Vector vectorRollPitchYaw)
 - Translate(Vector vector)
+- Lerp(Transform a,b, float t)
+- CatmullRom(Transform a,b,c,d, float t)
 - MatrixTransform(Matrix matrix)
 - GetMatrix() : Matrix result
 - ClearTransform()
@@ -422,8 +431,12 @@ Main camera looking at the scene. It is a Transform.
 - [constructor]Camera()
 - SetFarPlane(float val)
 - SetNearPlane(float val)
+- SetFOV(float val)
 - GetFarPlane() : float result
 - GetNearPlane() : float result
+- GetFOV() : float result
+- Lerp(Camera a,b, float t)
+- CatmullRom(Camera a,b,c,d, float t)
 
 #### Model
 Collection of Objects, Armatures, Lights, Decals. Also a transform by itself
@@ -459,6 +472,8 @@ A RenderableComponent describes a scene wich can render itself.
 - Compose()
 - OnStart(string task)
 - OnStop(string task)
+- GetLayerMask() : uint result
+- SetLayerMask(uint mask)
 
 #### Renderable2DComponent
 It can hold Sprites and Fonts and can sort them by layers, update and render them.

@@ -34,6 +34,8 @@ const char Node_BindLua::className[] = "Node";
 Luna<Node_BindLua>::FunctionType Node_BindLua::methods[] = {
 	lunamethod(Node_BindLua, GetName),
 	lunamethod(Node_BindLua, SetName),
+	lunamethod(Node_BindLua, SetLayerMask),
+	lunamethod(Node_BindLua, GetLayerMask),
 	{ NULL, NULL }
 };
 Luna<Node_BindLua>::PropertyType Node_BindLua::properties[] = {
@@ -80,6 +82,36 @@ int Node_BindLua::SetName(lua_State* L)
 	}
 	return 0;
 }
+int Node_BindLua::SetLayerMask(lua_State *L)
+{
+	if (node == nullptr)
+	{
+		wiLua::SError(L, "SetLayerMask(uint value) object is null!");
+		return 0;
+	}
+	int argc = wiLua::SGetArgCount(L);
+	if (argc > 0)
+	{
+		int mask = wiLua::SGetInt(L, 1);
+		node->SetLayerMask(*reinterpret_cast<uint32_t*>(&mask));
+	}
+	else
+	{
+		wiLua::SError(L, "SetLayerMask(uint value) not enough arguments!");
+	}
+	return 0;
+}
+int Node_BindLua::GetLayerMask(lua_State *L)
+{
+	if (node == nullptr)
+	{
+		wiLua::SError(L, "GetLayerMask() object is null!");
+		return 0;
+	}
+	uint32_t mask = node->GetLayerMask();
+	wiLua::SSetInt(L, *reinterpret_cast<int*>(&mask));
+	return 1;
+}
 
 void Node_BindLua::Bind()
 {
@@ -98,6 +130,8 @@ const char Transform_BindLua::className[] = "Transform";
 Luna<Transform_BindLua>::FunctionType Transform_BindLua::methods[] = {
 	lunamethod(Node_BindLua, GetName),
 	lunamethod(Node_BindLua, SetName),
+	lunamethod(Node_BindLua, SetLayerMask),
+	lunamethod(Node_BindLua, GetLayerMask),
 
 	lunamethod(Transform_BindLua, AttachTo),
 	lunamethod(Transform_BindLua, Detach),
@@ -106,6 +140,8 @@ Luna<Transform_BindLua>::FunctionType Transform_BindLua::methods[] = {
 	lunamethod(Transform_BindLua, Scale),
 	lunamethod(Transform_BindLua, Rotate),
 	lunamethod(Transform_BindLua, Translate),
+	lunamethod(Transform_BindLua, Lerp),
+	lunamethod(Transform_BindLua, CatmullRom),
 	lunamethod(Transform_BindLua, MatrixTransform),
 	lunamethod(Transform_BindLua, GetMatrix),
 	lunamethod(Transform_BindLua, ClearTransform),
@@ -280,6 +316,86 @@ int Transform_BindLua::Translate(lua_State* L)
 	else
 	{
 		wiLua::SError(L, "Translate(Vector vector) not enough arguments!");
+	}
+	return 0;
+}
+int Transform_BindLua::Lerp(lua_State* L)
+{
+	int argc = wiLua::SGetArgCount(L);
+	if (argc > 2)
+	{
+		Transform_BindLua* a = Luna<Transform_BindLua>::lightcheck(L, 1);
+		if (a != nullptr)
+		{
+			Transform_BindLua* b = Luna<Transform_BindLua>::lightcheck(L, 2);
+
+			if (b != nullptr)
+			{
+				float t = wiLua::SGetFloat(L, 3);
+				this->transform->Lerp(a->transform, b->transform, t);
+			}
+			else
+			{
+				wiLua::SError(L, "Lerp(Transform a,b, float t) argument (b) is not a Transform!");
+			}
+		}
+		else
+		{
+			wiLua::SError(L, "Lerp(Transform a,b, float t) argument (a) is not a Transform!");
+		}
+	}
+	else
+	{
+		wiLua::SError(L, "Lerp(Transform a,b, float t) not enough arguments!");
+	}
+	return 0;
+}
+int Transform_BindLua::CatmullRom(lua_State* L)
+{
+	int argc = wiLua::SGetArgCount(L);
+	if (argc > 4)
+	{
+		Transform_BindLua* a = Luna<Transform_BindLua>::lightcheck(L, 1);
+		if (a != nullptr)
+		{
+			Transform_BindLua* b = Luna<Transform_BindLua>::lightcheck(L, 2);
+
+			if (b != nullptr)
+			{
+				Transform_BindLua* c = Luna<Transform_BindLua>::lightcheck(L, 3);
+
+				if (c != nullptr)
+				{
+					Transform_BindLua* d = Luna<Transform_BindLua>::lightcheck(L, 4);
+
+					if (d != nullptr)
+					{
+						float t = wiLua::SGetFloat(L, 5);
+						this->transform->CatmullRom(a->transform, b->transform, c->transform, d->transform, t);
+					}
+					else
+					{
+						wiLua::SError(L, "CatmullRom(Transform a,b,c,d, float t) argument (d) is not a Transform!");
+					}
+				}
+				else
+				{
+					wiLua::SError(L, "CatmullRom(Transform a,b,c,d, float t) argument (c) is not a Transform!");
+				}
+			}
+			else
+			{
+				wiLua::SError(L, "CatmullRom(Transform a,b,c,d, float t) argument (b) is not a Transform!");
+			}
+		}
+		else
+		{
+			wiLua::SError(L, "CatmullRom(Transform a,b,c,d, float t) argument (a) is not a Transform!");
+		}
+	}
+	else
+	{
+		wiLua::SError(L, "CatmullRom(Transform a,b,c,d, float t) not enough arguments!");
 	}
 	return 0;
 }
@@ -479,6 +595,8 @@ const char Object_BindLua::className[] = "Object";
 Luna<Object_BindLua>::FunctionType Object_BindLua::methods[] = {
 	lunamethod(Node_BindLua, GetName),
 	lunamethod(Node_BindLua, SetName),
+	lunamethod(Node_BindLua, SetLayerMask),
+	lunamethod(Node_BindLua, GetLayerMask),
 
 	lunamethod(Cullable_BindLua, Intersects),
 	lunamethod(Cullable_BindLua, GetAABB),
@@ -491,6 +609,8 @@ Luna<Object_BindLua>::FunctionType Object_BindLua::methods[] = {
 	lunamethod(Transform_BindLua, Scale),
 	lunamethod(Transform_BindLua, Rotate),
 	lunamethod(Transform_BindLua, Translate),
+	lunamethod(Transform_BindLua, Lerp),
+	lunamethod(Transform_BindLua, CatmullRom),
 	lunamethod(Transform_BindLua, MatrixTransform),
 	lunamethod(Transform_BindLua, GetMatrix),
 	lunamethod(Transform_BindLua, ClearTransform),
@@ -652,7 +772,7 @@ int Object_BindLua::SetColor(lua_State *L)
 		return 0;
 	}
 	int argc = wiLua::SGetArgCount(L);
-	if (argc > 2)
+	if (argc > 0)
 	{
 		Vector_BindLua* vec = Luna<Vector_BindLua>::lightcheck(L, 1);
 		if (vec != nullptr)
@@ -724,6 +844,8 @@ const char Armature_BindLua::className[] = "Armature";
 Luna<Armature_BindLua>::FunctionType Armature_BindLua::methods[] = {
 	lunamethod(Node_BindLua, GetName),
 	lunamethod(Node_BindLua, SetName),
+	lunamethod(Node_BindLua, SetLayerMask),
+	lunamethod(Node_BindLua, GetLayerMask),
 
 	lunamethod(Transform_BindLua, AttachTo),
 	lunamethod(Transform_BindLua, Detach),
@@ -732,6 +854,8 @@ Luna<Armature_BindLua>::FunctionType Armature_BindLua::methods[] = {
 	lunamethod(Transform_BindLua, Scale),
 	lunamethod(Transform_BindLua, Rotate),
 	lunamethod(Transform_BindLua, Translate),
+	lunamethod(Transform_BindLua, Lerp),
+	lunamethod(Transform_BindLua, CatmullRom),
 	lunamethod(Transform_BindLua, MatrixTransform),
 	lunamethod(Transform_BindLua, GetMatrix),
 	lunamethod(Transform_BindLua, ClearTransform),
@@ -1088,6 +1212,8 @@ const char Decal_BindLua::className[] = "Decal";
 Luna<Decal_BindLua>::FunctionType Decal_BindLua::methods[] = {
 	lunamethod(Node_BindLua, GetName),
 	lunamethod(Node_BindLua, SetName),
+	lunamethod(Node_BindLua, SetLayerMask),
+	lunamethod(Node_BindLua, GetLayerMask),
 
 	lunamethod(Cullable_BindLua, Intersects),
 	lunamethod(Cullable_BindLua, GetAABB),
@@ -1100,6 +1226,8 @@ Luna<Decal_BindLua>::FunctionType Decal_BindLua::methods[] = {
 	lunamethod(Transform_BindLua, Scale),
 	lunamethod(Transform_BindLua, Rotate),
 	lunamethod(Transform_BindLua, Translate),
+	lunamethod(Transform_BindLua, Lerp),
+	lunamethod(Transform_BindLua, CatmullRom),
 	lunamethod(Transform_BindLua, MatrixTransform),
 	lunamethod(Transform_BindLua, GetMatrix),
 	lunamethod(Transform_BindLua, ClearTransform),
@@ -1663,6 +1791,8 @@ const char Camera_BindLua::className[] = "Camera";
 Luna<Camera_BindLua>::FunctionType Camera_BindLua::methods[] = {
 	lunamethod(Node_BindLua, GetName),
 	lunamethod(Node_BindLua, SetName),
+	lunamethod(Node_BindLua, SetLayerMask),
+	lunamethod(Node_BindLua, GetLayerMask),
 
 	lunamethod(Transform_BindLua, AttachTo),
 	lunamethod(Transform_BindLua, Detach),
@@ -1681,8 +1811,12 @@ Luna<Camera_BindLua>::FunctionType Camera_BindLua::methods[] = {
 
 	lunamethod(Camera_BindLua, SetFarPlane),
 	lunamethod(Camera_BindLua, SetNearPlane),
+	lunamethod(Camera_BindLua, SetFOV),
 	lunamethod(Camera_BindLua, GetFarPlane),
 	lunamethod(Camera_BindLua, GetNearPlane),
+	lunamethod(Camera_BindLua, GetFOV),
+	lunamethod(Camera_BindLua, Lerp),
+	lunamethod(Camera_BindLua, CatmullRom),
 	{ NULL, NULL }
 };
 Luna<Camera_BindLua>::PropertyType Camera_BindLua::properties[] = {
@@ -1732,6 +1866,20 @@ int Camera_BindLua::SetNearPlane(lua_State *L)
 	}
 	return 0;
 }
+int Camera_BindLua::SetFOV(lua_State *L)
+{
+	int argc = wiLua::SGetArgCount(L);
+	if (argc > 0)
+	{
+		cam->fov = wiLua::SGetFloat(L, 1);
+		cam->UpdateProjection();
+	}
+	else
+	{
+		wiLua::SError(L, "SetFOV(float val) not enough arguments!");
+	}
+	return 0;
+}
 int Camera_BindLua::GetFarPlane(lua_State *L)
 {
 	wiLua::SSetFloat(L, cam->zFarP);
@@ -1741,6 +1889,91 @@ int Camera_BindLua::GetNearPlane(lua_State *L)
 {
 	wiLua::SSetFloat(L, cam->zNearP);
 	return 1;
+}
+int Camera_BindLua::GetFOV(lua_State *L)
+{
+	wiLua::SSetFloat(L, cam->fov);
+	return 1;
+}
+int Camera_BindLua::Lerp(lua_State* L)
+{
+	int argc = wiLua::SGetArgCount(L);
+	if (argc > 2)
+	{
+		Camera_BindLua* a = Luna<Camera_BindLua>::lightcheck(L, 1);
+		if (a != nullptr)
+		{
+			Camera_BindLua* b = Luna<Camera_BindLua>::lightcheck(L, 2);
+
+			if (b != nullptr)
+			{
+				float t = wiLua::SGetFloat(L, 3);
+				this->cam->Lerp(a->cam, b->cam, t);
+			}
+			else
+			{
+				wiLua::SError(L, "Lerp(Camera a,b, float t) argument (b) is not a Camera!");
+			}
+		}
+		else
+		{
+			wiLua::SError(L, "Lerp(Camera a,b, float t) argument (a) is not a Camera!");
+		}
+	}
+	else
+	{
+		wiLua::SError(L, "Lerp(Camera a,b, float t) not enough arguments!");
+	}
+	return 0;
+}
+int Camera_BindLua::CatmullRom(lua_State* L)
+{
+	int argc = wiLua::SGetArgCount(L);
+	if (argc > 4)
+	{
+		Camera_BindLua* a = Luna<Camera_BindLua>::lightcheck(L, 1);
+		if (a != nullptr)
+		{
+			Camera_BindLua* b = Luna<Camera_BindLua>::lightcheck(L, 2);
+
+			if (b != nullptr)
+			{
+				Camera_BindLua* c = Luna<Camera_BindLua>::lightcheck(L, 3);
+
+				if (c != nullptr)
+				{
+					Camera_BindLua* d = Luna<Camera_BindLua>::lightcheck(L, 4);
+
+					if (d != nullptr)
+					{
+						float t = wiLua::SGetFloat(L, 5);
+						this->cam->CatmullRom(a->cam, b->cam, c->cam, d->cam, t);
+					}
+					else
+					{
+						wiLua::SError(L, "CatmullRom(Camera a,b,c,d, float t) argument (d) is not a Camera!");
+					}
+				}
+				else
+				{
+					wiLua::SError(L, "CatmullRom(Camera a,b,c,d, float t) argument (c) is not a Camera!");
+				}
+			}
+			else
+			{
+				wiLua::SError(L, "CatmullRom(Camera a,b,c,d, float t) argument (b) is not a Camera!");
+			}
+		}
+		else
+		{
+			wiLua::SError(L, "CatmullRom(Camera a,b,c,d, float t) argument (a) is not a Camera!");
+		}
+	}
+	else
+	{
+		wiLua::SError(L, "CatmullRom(Camera a,b,c,d, float t) not enough arguments!");
+	}
+	return 0;
 }
 
 void Camera_BindLua::Bind()
@@ -1765,6 +1998,8 @@ const char Model_BindLua::className[] = "Model";
 Luna<Model_BindLua>::FunctionType Model_BindLua::methods[] = {
 	lunamethod(Node_BindLua, GetName),
 	lunamethod(Node_BindLua, SetName),
+	lunamethod(Node_BindLua, SetLayerMask),
+	lunamethod(Node_BindLua, GetLayerMask),
 
 	lunamethod(Transform_BindLua, AttachTo),
 	lunamethod(Transform_BindLua, Detach),
@@ -1773,6 +2008,8 @@ Luna<Model_BindLua>::FunctionType Model_BindLua::methods[] = {
 	lunamethod(Transform_BindLua, Scale),
 	lunamethod(Transform_BindLua, Rotate),
 	lunamethod(Transform_BindLua, Translate),
+	lunamethod(Transform_BindLua, Lerp),
+	lunamethod(Transform_BindLua, CatmullRom),
 	lunamethod(Transform_BindLua, MatrixTransform),
 	lunamethod(Transform_BindLua, GetMatrix),
 	lunamethod(Transform_BindLua, ClearTransform),

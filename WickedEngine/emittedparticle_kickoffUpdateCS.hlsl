@@ -1,17 +1,17 @@
 #include "globals.hlsli"
 #include "ShaderInterop_EmittedParticle.h"
 
-RWSTRUCTUREDBUFFER(counterBuffer, ParticleCounters, 4);
+RWRAWBUFFER(counterBuffer, 4);
 RWRAWBUFFER(indirectBuffers, 5);
 
 [numthreads(1, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
 	// Load dead particle count:
-	uint deadCount = counterBuffer[0].deadCount;
+	uint deadCount = counterBuffer.Load(PARTICLECOUNTER_OFFSET_DEADCOUNT);
 
-	// Load alive particle count from draw argument buffer (which contains alive particle count * 6):
-	uint aliveCount_NEW = indirectBuffers.Load(ARGUMENTBUFFER_OFFSET_DRAWPARTICLES) / 6;
+	// Load alive particle count:
+	uint aliveCount_NEW = counterBuffer.Load(PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION);
 
 	// we can not emit more than there are free slots in the dead list:
 	uint realEmitCount = min(deadCount, xEmitCount);
@@ -22,12 +22,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
 	// Fill dispatch argument buffer for simulation (ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ):
 	indirectBuffers.Store3(ARGUMENTBUFFER_OFFSET_DISPATCHSIMULATION, uint3(ceil((float)(aliveCount_NEW + realEmitCount) / (float)THREADCOUNT_SIMULATION), 1, 1));
 
-	// Reset the draw argument buffer to defaults (VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation):
-	indirectBuffers.Store4(ARGUMENTBUFFER_OFFSET_DRAWPARTICLES, uint4(0, 1, 0, 0));
-
 	// copy new alivelistcount to current alivelistcount:
-	counterBuffer[0].aliveCount = aliveCount_NEW;
+	counterBuffer.Store(PARTICLECOUNTER_OFFSET_ALIVECOUNT, aliveCount_NEW);
+
+	// reset new alivecount:
+	counterBuffer.Store(PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION, 0);
 
 	// and write real emit count:
-	counterBuffer[0].realEmitCount = realEmitCount;
+	counterBuffer.Store(PARTICLECOUNTER_OFFSET_REALEMITCOUNT, realEmitCount);
 }

@@ -7,8 +7,7 @@ RWSTRUCTUREDBUFFER(particleBuffer, Particle, 0);
 RWSTRUCTUREDBUFFER(aliveBuffer_CURRENT, uint, 1);
 RWSTRUCTUREDBUFFER(aliveBuffer_NEW, uint, 2);
 RWSTRUCTUREDBUFFER(deadBuffer, uint, 3);
-RWSTRUCTUREDBUFFER(counterBuffer, ParticleCounters, 4);
-RWRAWBUFFER(indirectBuffers, 5);
+RWRAWBUFFER(counterBuffer, 4);
 RWSTRUCTUREDBUFFER(distanceBuffer, float, 6);
 
 #define NUM_LDS_FORCEFIELDS 32
@@ -22,14 +21,15 @@ struct LDS_ForceField
 };
 groupshared LDS_ForceField forceFields[NUM_LDS_FORCEFIELDS];
 
+#define SPH_FLOOR_COLLISION
+#define SPH_BOX_COLLISION
+
 
 [numthreads(THREADCOUNT_SIMULATION, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 {
-#ifndef SHADERCOMPILER_SPIRV
-	// TODO: this shader crashes the Vulkan compute pipeline creation...
-
-	uint aliveCount = counterBuffer[0].aliveCount;
+	//uint aliveCount = counterBuffer[0].aliveCount;
+	uint aliveCount = counterBuffer.Load(PARTICLECOUNTER_OFFSET_ALIVECOUNT);
 
 	// Load the forcefields into LDS:
 	uint numForceFields = min(g_xFrame_ForceFieldArrayCount, NUM_LDS_FORCEFIELDS);
@@ -49,7 +49,8 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 
 	if (DTid.x < aliveCount)
 	{
-		const float dt = g_xFrame_DeltaTime;
+		// simulation can be either fixed or variable timestep:
+		const float dt = xEmitterFixedTimestep >= 0 ? xEmitterFixedTimestep : g_xFrame_DeltaTime;
 
 		uint particleIndex = aliveBuffer_CURRENT[DTid.x];
 		Particle particle = particleBuffer[particleIndex];
@@ -58,7 +59,6 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 		{
 			// simulate:
 
-			float3 force = 0;
 			for (uint i = 0; i < numForceFields; ++i)
 			{
 				LDS_ForceField forceField = forceFields[i];
@@ -75,9 +75,8 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 					dir = forceField.normal;
 				}
 
-				force += dir * forceField.gravity * (1 - saturate(dist * forceField.range_inverse));
+				particle.force += dir * forceField.gravity * (1 - saturate(dist * forceField.range_inverse));
 			}
-			particle.velocity += force * dt;
 
 
 #ifdef DEPTHCOLLISIONS
@@ -119,7 +118,61 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 
 #endif // DEPTHCOLLISIONS
 
+			// integrate:
+			particle.velocity += particle.force * dt;
 			particle.position += particle.velocity * dt;
+
+			// reset force for next frame:
+			particle.force = 0;
+
+			if (xSPH_ENABLED)
+			{
+				// drag: 
+				particle.velocity *= 0.98f;
+
+				// debug collisions:
+
+				float elastic = 0.6;
+
+				float lifeLerp = 1 - particle.life / particle.maxLife;
+				float particleSize = lerp(particle.sizeBeginEnd.x, particle.sizeBeginEnd.y, lifeLerp);
+
+#ifdef SPH_FLOOR_COLLISION
+				// floor collision:
+				if (particle.position.y - particleSize < 0)
+				{
+					particle.position.y = particleSize;
+					particle.velocity.y *= -elastic;
+				}
+#endif // FLOOR_COLLISION
+
+
+#ifdef SPH_BOX_COLLISION
+				// box collision:
+				float3 extent = float3(40, 0, 22);
+				if (particle.position.x + particleSize > extent.x)
+				{
+					particle.position.x = extent.x - particleSize;
+					particle.velocity.x *= -elastic;
+				}
+				if (particle.position.x - particleSize < -extent.x)
+				{
+					particle.position.x = -extent.x + particleSize;
+					particle.velocity.x *= -elastic;
+				}
+				if (particle.position.z + particleSize > extent.z)
+				{
+					particle.position.z = extent.z - particleSize;
+					particle.velocity.z *= -elastic;
+				}
+				if (particle.position.z - particleSize < -extent.z)
+				{
+					particle.position.z = -extent.z + particleSize;
+					particle.velocity.z *= -elastic;
+				}
+#endif // BOX_COLLISION
+
+			}
 
 			particle.life -= dt;
 
@@ -128,8 +181,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 
 			// add to new alive list:
 			uint newAliveIndex;
-			indirectBuffers.InterlockedAdd(ARGUMENTBUFFER_OFFSET_DRAWPARTICLES, 6, newAliveIndex); // write the draw argument buffer, which should contain particle count * 6
-			newAliveIndex /= 6; // draw arg buffer contains particle count * 6, so just divide to retrieve correct index
+			counterBuffer.InterlockedAdd(PARTICLECOUNTER_OFFSET_ALIVECOUNT_AFTERSIMULATION, 1, newAliveIndex);
 			aliveBuffer_NEW[newAliveIndex] = particleIndex;
 
 #ifdef SORTING
@@ -144,10 +196,9 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 		{
 			// kill:
 			uint deadIndex;
-			InterlockedAdd(counterBuffer[0].deadCount, 1, deadIndex);
+			counterBuffer.InterlockedAdd(PARTICLECOUNTER_OFFSET_DEADCOUNT, 1, deadIndex);
 			deadBuffer[deadIndex] = particleIndex;
 		}
 	}
 
-#endif // SHADERCOMPILER_SPIRV
 }

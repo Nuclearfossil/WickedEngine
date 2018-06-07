@@ -246,7 +246,37 @@ namespace wiRenderer_BindLua
 	}
 	int GetCamera(lua_State* L)
 	{
+		int argc = wiLua::SGetArgCount(L);
+		if (argc > 0)
+		{
+			string name = wiLua::SGetString(L, 1);
+			Camera* camera = wiRenderer::getCameraByName(name);
+			if (camera != nullptr)
+			{
+				Luna<Camera_BindLua>::push(L, new Camera_BindLua(camera));
+				return 1;
+			}
+			else
+			{
+				wiLua::SError(L, "GetCamera(opt String name) name was provided but there was no corresponding camera found!");
+				return 0;
+			}
+		}
+
 		Luna<Camera_BindLua>::push(L, new Camera_BindLua(wiRenderer::getCamera()));
+		return 1;
+	}
+	int GetCameras(lua_State* L)
+	{
+		stringstream ss("");
+		for (auto& m : wiRenderer::GetScene().models)
+		{
+			for (auto& x : m->cameras)
+			{
+				ss << x->name << endl;
+			}
+		}
+		wiLua::SSetString(L, ss.str());
 		return 1;
 	}
 
@@ -296,31 +326,26 @@ namespace wiRenderer_BindLua
 		if (argc > 0)
 		{
 			string fileName = wiLua::SGetString(L, 1);
-			string identifier = "common";
 			XMMATRIX transform = XMMatrixIdentity();
 			if (argc > 1)
 			{
-				identifier = wiLua::SGetString(L, 2);
-				if (argc > 2)
+				Matrix_BindLua* matrix = Luna<Matrix_BindLua>::lightcheck(L, 2);
+				if (matrix != nullptr)
 				{
-					Matrix_BindLua* matrix = Luna<Matrix_BindLua>::lightcheck(L, 3);
-					if (matrix != nullptr)
-					{
-						transform = matrix->matrix;
-					}
-					else
-					{
-						wiLua::SError(L, "LoadModel(string fileName, opt string identifier, opt Matrix transform) argument is not a matrix!");
-					}
+					transform = matrix->matrix;
+				}
+				else
+				{
+					wiLua::SError(L, "LoadModel(string fileName, opt Matrix transform) argument is not a matrix!");
 				}
 			}
-			Model* model = wiRenderer::LoadModel(fileName, transform, identifier);
+			Model* model = wiRenderer::LoadModel(fileName, transform);
 			Luna<Model_BindLua>::push(L, new Model_BindLua(model));
 			return 1;
 		}
 		else
 		{
-			wiLua::SError(L, "LoadModel(string fileName, opt string identifier, opt Matrix transform) not enough arguments!");
+			wiLua::SError(L, "LoadModel(string fileName, opt Matrix transform) not enough arguments!");
 		}
 		return 0;
 	}
@@ -338,9 +363,28 @@ namespace wiRenderer_BindLua
 		}
 		return 0;
 	}
-	int FinishLoading(lua_State* L)
+	int DuplicateInstance(lua_State* L)
 	{
-		wiRenderer::FinishLoading();
+		int argc = wiLua::SGetArgCount(L);
+		if (argc > 0)
+		{
+			Object_BindLua* x = Luna<Object_BindLua>::lightcheck(L, 1);
+			if (x != nullptr)
+			{
+				Object* o = new Object(*x->object);
+				wiRenderer::Add(o);
+				Luna<Object_BindLua>::push(L, new Object_BindLua(o));
+				return 1;
+			}
+			else
+			{
+				wiLua::SError(L, "DuplicateInstance(Object object) argument type mismatch!");
+			}
+		}
+		else
+		{
+			wiLua::SError(L, "DuplicateInstance(Object object) not enough arguments!");
+		}
 		return 0;
 	}
 	int SetEnvironmentMap(lua_State* L)
@@ -543,20 +587,17 @@ namespace wiRenderer_BindLua
 			if (ray != nullptr)
 			{
 				int pickType = PICKTYPE::PICK_OPAQUE;
-				string layer = "", layerDisable = "";
+				uint32_t layerMask = 0xFFFFFFFF;
 				if (argc > 1)
 				{
 					pickType = wiLua::SGetInt(L, 2);
 					if (argc > 2)
 					{
-						layer = wiLua::SGetString(L, 3);
-						if (argc > 3)
-						{
-							layerDisable = wiLua::SGetString(L, 4);
-						}
+						int mask = wiLua::SGetInt(L, 3);
+						layerMask = *reinterpret_cast<uint32_t*>(&mask);
 					}
 				}
-				wiRenderer::Picked pick = wiRenderer::Pick(ray->ray, pickType, layer, layerDisable);
+				wiRenderer::Picked pick = wiRenderer::Pick(ray->ray, pickType, layerMask);
 				Luna<Object_BindLua>::push(L, new Object_BindLua(pick.object));
 				Luna<Vector_BindLua>::push(L, new Vector_BindLua(XMLoadFloat3(&pick.position)));
 				Luna<Vector_BindLua>::push(L, new Vector_BindLua(XMLoadFloat3(&pick.normal)));
@@ -704,6 +745,7 @@ namespace wiRenderer_BindLua
 			wiLua::GetGlobal()->RegisterFunc("GetScreenWidth", GetScreenWidth);
 			wiLua::GetGlobal()->RegisterFunc("GetScreenHeight", GetScreenHeight);
 			wiLua::GetGlobal()->RegisterFunc("GetCamera", GetCamera);
+			wiLua::GetGlobal()->RegisterFunc("GetCameras", GetCameras);
 
 			wiLua::GetGlobal()->RegisterFunc("SetResolutionScale", SetResolutionScale);
 			wiLua::GetGlobal()->RegisterFunc("SetGamma", SetGamma);
@@ -711,7 +753,7 @@ namespace wiRenderer_BindLua
 
 			wiLua::GetGlobal()->RegisterFunc("LoadModel", LoadModel);
 			wiLua::GetGlobal()->RegisterFunc("LoadWorldInfo", LoadWorldInfo);
-			wiLua::GetGlobal()->RegisterFunc("FinishLoading", FinishLoading);
+			wiLua::GetGlobal()->RegisterFunc("DuplicateInstance", DuplicateInstance);
 			wiLua::GetGlobal()->RegisterFunc("SetEnvironmentMap", SetEnvironmentMap);
 			wiLua::GetGlobal()->RegisterFunc("SetColorGrading", SetColorGrading);
 			wiLua::GetGlobal()->RegisterFunc("HairParticleSettings", HairParticleSettings);
@@ -744,6 +786,8 @@ namespace wiRenderer_BindLua
 			wiLua::GetGlobal()->RunText("PICK_DECAL = 16");
 			wiLua::GetGlobal()->RunText("PICK_ENVPROBE = 32");
 			wiLua::GetGlobal()->RunText("PICK_FORCEFIELD = 64");
+			wiLua::GetGlobal()->RunText("PICK_EMITTER = 128");
+			wiLua::GetGlobal()->RunText("PICK_CAMERA = 256");
 
 
 			wiLua::GetGlobal()->RegisterFunc("ClearWorld", ClearWorld);

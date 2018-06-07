@@ -24,11 +24,14 @@ Luna<TiledForwardRenderableComponent_BindLua>::FunctionType TiledForwardRenderab
 	lunamethod(RenderableComponent_BindLua, Unload),
 	lunamethod(RenderableComponent_BindLua, Start),
 	lunamethod(RenderableComponent_BindLua, Stop),
+	lunamethod(RenderableComponent_BindLua, FixedUpdate),
 	lunamethod(RenderableComponent_BindLua, Update),
 	lunamethod(RenderableComponent_BindLua, Render),
 	lunamethod(RenderableComponent_BindLua, Compose),
 	lunamethod(RenderableComponent_BindLua, OnStart),
 	lunamethod(RenderableComponent_BindLua, OnStop),
+	lunamethod(RenderableComponent_BindLua, GetLayerMask),
+	lunamethod(RenderableComponent_BindLua, SetLayerMask),
 
 	lunamethod(Renderable3DComponent_BindLua, SetSSAOEnabled),
 	lunamethod(Renderable3DComponent_BindLua, SetSSREnabled),
@@ -49,7 +52,6 @@ Luna<TiledForwardRenderableComponent_BindLua>::FunctionType TiledForwardRenderab
 	lunamethod(Renderable3DComponent_BindLua, SetStereogramEnabled),
 	lunamethod(Renderable3DComponent_BindLua, SetEyeAdaptionEnabled),
 	lunamethod(Renderable3DComponent_BindLua, SetTessellationEnabled),
-	lunamethod(Renderable3DComponent_BindLua, SetMSAASampleCount),
 	lunamethod(Renderable3DComponent_BindLua, SetSharpenFilterEnabled),
 	lunamethod(Renderable3DComponent_BindLua, SetSharpenFilterAmount),
 

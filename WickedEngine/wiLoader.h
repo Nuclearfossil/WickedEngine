@@ -28,11 +28,17 @@ struct Bone;
 struct Mesh;
 struct Material;
 struct Object;
+struct Model;
 
 typedef std::map<std::string,Mesh*> MeshCollection;
 typedef std::map<std::string,Material*> MaterialCollection;
 
 class wiArchive;
+
+struct ModelChild
+{
+	Model* parentModel = nullptr;
+};
 
 GFX_STRUCT Instance
 {
@@ -492,8 +498,7 @@ public:
 
 	Mesh(const std::string& newName = "");
 	~Mesh();
-	void LoadFromFile(const std::string& newName, const std::string& fname
-		, const MaterialCollection& materialColl, const std::unordered_set<Armature*>& armatures, const std::string& identifier="");
+	void LoadFromFile(const std::string& newName, const std::string& fname, const MaterialCollection& materialColl, const std::unordered_set<Armature*>& armatures);
 	void Optimize();
 	void CreateRenderData();
 	static void CreateImpostorVB();
@@ -517,12 +522,13 @@ public:
 	AABB bounds;
 	void Serialize(wiArchive& archive);
 };
-struct Object : public Cullable, public Transform
+struct Object : public Cullable, public Transform, public ModelChild
 {
 	std::string meshName;
 	Mesh* mesh;
 
 	bool renderable;
+	int cascadeMask = 0; // which shadow cascades to skip (0: skip none, 1: skip first, etc...)
 
 	//PARTICLE
 	std::vector< wiEmittedParticle* > eParticleSystems;
@@ -688,10 +694,9 @@ struct AnimationLayer
 
 	void Serialize(wiArchive& archive);
 };
-struct Armature : public Transform
+struct Armature : public Transform, public ModelChild
 {
 public:
-	std::string unidentified_name;
 	std::vector<Bone*> boneCollection;
 	std::vector<Bone*> rootbones;
 
@@ -719,11 +724,8 @@ public:
 	Armature() :Transform(){
 		init();
 	};
-	Armature(const std::string& newName, const std::string& identifier):Transform(){
-		unidentified_name=newName;
-		std::stringstream ss("");
-		ss<<newName<<identifier;
-		name=ss.str();
+	Armature(const std::string& newName):Transform(){
+		name=newName;
 		init();
 	}
 	virtual ~Armature();
@@ -750,6 +752,7 @@ public:
 	AnimationLayer* GetAnimLayer(const std::string& name);
 	void AddAnimLayer(const std::string& name);
 	void DeleteAnimLayer(const std::string& name);
+	void RecursiveRest(Bone* bone);
 	virtual void UpdateTransform();
 	void UpdateArmature();
 	void CreateFamily();
@@ -852,7 +855,7 @@ struct SHCAM{
 		return XMMatrixTranspose(XMLoadFloat4x4(&View)*XMLoadFloat4x4(&Projection));
 	}
 };
-struct Light : public Cullable , public Transform
+struct Light : public Cullable , public Transform, public ModelChild
 {
 	enum LightType {
 		DIRECTIONAL			= ENTITY_TYPE_DIRECTIONALLIGHT,
@@ -904,7 +907,7 @@ struct Light : public Cullable , public Transform
 private:
 	LightType type;
 };
-struct Decal : public Cullable, public Transform
+struct Decal : public Cullable, public Transform, public ModelChild
 {
 	std::string texName,norName;
 	wiGraphicsTypes::Texture2D* texture,*normal;
@@ -951,7 +954,8 @@ struct Wind{
 	float waveSize;
 	Wind():direction(XMFLOAT3(0,0,0)),randomness(5),waveSize(1){}
 };
-struct Camera:public Transform{
+struct Camera : public Transform, public ModelChild
+{
 	XMFLOAT4X4 View, Projection, VP;
 	XMFLOAT3 At, Up;
 	float width, height;
@@ -1076,6 +1080,9 @@ struct Camera:public Transform{
 		XMStoreFloat4x4(&this->InvProjection, InvP);
 	}
 
+	void Lerp(const Camera* a, const Camera* b, float t);
+	void CatmullRom(const Camera* a, const Camera* b, const Camera* c, const Camera* d, float t);
+
 	XMVECTOR GetEye() const
 	{
 		return XMLoadFloat3(&translation);
@@ -1123,8 +1130,10 @@ struct Camera:public Transform{
 		return XMLoadFloat4x4(&realProjection);
 	}
 	virtual void UpdateTransform();
+
+	void Serialize(wiArchive& archive);
 };
-struct EnvironmentProbe : public Transform, public Cullable
+struct EnvironmentProbe : public Transform, public Cullable, public ModelChild
 {
 	int textureIndex;
 	bool realTime;
@@ -1136,7 +1145,7 @@ struct EnvironmentProbe : public Transform, public Cullable
 
 	void Serialize(wiArchive& archive);
 };
-struct ForceField : public Transform
+struct ForceField : public Transform, public ModelChild
 {
 	int type;
 	float gravity; // negative = deflector, positive = attractor
@@ -1162,11 +1171,12 @@ struct Model : public Transform
 	std::unordered_set<Decal*> decals;
 	std::unordered_set<ForceField*> forces;
 	std::list<EnvironmentProbe*> environmentProbes;
+	std::list<Camera*> cameras;
 
 	Model();
 	virtual ~Model();
 	void CleanUp();
-	void LoadFromDisk(const std::string& fileName, const std::string& identifier);
+	void LoadFromDisk(const std::string& fileName);
 	void FinishLoading();
 	void UpdateModel();
 	void Add(Object* value);
@@ -1175,6 +1185,7 @@ struct Model : public Transform
 	void Add(Decal* value);
 	void Add(ForceField* value);
 	void Add(EnvironmentProbe* value);
+	void Add(Camera* value);
 	// merge
 	void Add(Model* value);
 	void Serialize(wiArchive& archive);
@@ -1196,20 +1207,6 @@ struct Scene
 	void Update();
 };
 
-
-
-// Create rest positions for bone tree
-void RecursiveRest(Armature* armature, Bone* bone);
-
-void LoadWiArmatures(const std::string& directory, const std::string& filename, const std::string& identifier, std::list<Armature*>& armatures);
-void LoadWiMaterialLibrary(const std::string& directory, const std::string& filename, const std::string& identifier, const std::string& texturesDir, MaterialCollection& materials);
-void LoadWiObjects(const std::string& directory, const std::string& filename, const std::string& identifier, std::list<Object*>& objects
-				   , std::list<Armature*>& armatures, MeshCollection& meshes, const MaterialCollection& materials);
-void LoadWiMeshes(const std::string& directory, const std::string& filename, const std::string& identifier, MeshCollection& meshes, const std::list<Armature*>& armatures, const MaterialCollection& materials);
-void LoadWiActions(const std::string& directory, const std::string& filename, const std::string& identifier, std::list<Armature*>& armatures);
-void LoadWiLights(const std::string& directory, const std::string& filename, const std::string& identifier, std::list<Light*>& lights);
+// Load world info from file:
 void LoadWiWorldInfo(const std::string& fileName, WorldInfo& worldInfo, Wind& wind);
-void LoadWiCameras(const std::string&directory, const std::string& name, const std::string& identifier, std::vector<Camera>& cameras
-				   ,const std::list<Armature*>& armatures);
-void LoadWiDecals(const std::string&directory, const std::string& name, const std::string& texturesDir, std::list<Decal*>& decals);
 

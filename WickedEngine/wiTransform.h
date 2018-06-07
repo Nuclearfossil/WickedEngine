@@ -12,14 +12,16 @@ struct Node
 private:
 	static std::atomic<uint64_t> __Unique_ID_Counter;
 	uint64_t ID;
+	uint32_t layerMask = 0xFFFFFFFF; // all layers enabled by default
 public:
 	std::string name;
 
 	Node();
 
+	void SetLayerMask(uint32_t value) { layerMask = value; }
+	virtual uint32_t GetLayerMask() const { return layerMask; }
 	
-	std::string GetLayerID();
-	uint64_t GetID() { return ID; }
+	uint64_t GetID() const { return ID; }
 	void SetID(uint64_t newID) { ID = newID; }
 	static const uint64_t INVALID_ID = UINT64_MAX;
 
@@ -70,10 +72,14 @@ struct Transform : public Node
 	void RotateRollPitchYaw(const XMFLOAT3& value);
 	void Rotate(const XMFLOAT4& quaternion);
 	void Scale(const XMFLOAT3& value);
+	void Lerp(const Transform* a, const Transform* b, float t);
+	void CatmullRom(const Transform* a, const Transform* b, const Transform* c, const Transform* d, float t);
 	// Update this transform and children recursively
 	virtual void UpdateTransform();
 	// Get the root of the tree
 	Transform* GetRoot();
+	// Layer mask with parent hierarchy masking
+	virtual uint32_t GetLayerMask() const override;
 	void Serialize(wiArchive& archive);
 };
 
