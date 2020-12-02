@@ -1,40 +1,32 @@
 #pragma once
+#include "WickedEngine.h"
 
-struct Material;
-class wiGUI;
-class wiWindow;
-class wiLabel;
-class wiCheckBox;
-class wiSlider;
-class wiTextInputField;
+class EditorComponent;
 
-class CameraWindow
+class CameraWindow : public wiWindow
 {
 public:
-	CameraWindow(wiGUI* gui);
-	~CameraWindow();
+	void Create(EditorComponent* editor);
 
 	void ResetCam();
 
-	Camera* proxy = nullptr;
-	void SetProxy(Camera* camera);
+	wiECS::Entity proxy = wiECS::INVALID_ENTITY;
+	void SetEntity(wiECS::Entity entity);
 
-	Transform* orbitalCamTarget;
 
-	wiGUI* GUI;
+	wiScene::TransformComponent camera_transform;
+	wiScene::TransformComponent camera_target;
 
-	wiWindow* cameraWindow;
-	wiSlider* farPlaneSlider;
-	wiSlider* nearPlaneSlider;
-	wiSlider* fovSlider;
-	wiSlider* movespeedSlider;
-	wiSlider* rotationspeedSlider;
-	wiButton* resetButton;
-	wiCheckBox* fpsCheckBox;
+	wiSlider farPlaneSlider;
+	wiSlider nearPlaneSlider;
+	wiSlider fovSlider;
+	wiSlider movespeedSlider;
+	wiSlider rotationspeedSlider;
+	wiButton resetButton;
+	wiCheckBox fpsCheckBox;
 
-	wiButton* proxyButton;
-	wiTextInputField* proxyNameField;
-	wiCheckBox* followCheckBox;
-	wiSlider* followSlider;
+	wiButton proxyButton;
+	wiCheckBox followCheckBox;
+	wiSlider followSlider;
 };
 

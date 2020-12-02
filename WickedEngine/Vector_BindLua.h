@@ -1,8 +1,7 @@
 #pragma once
+#include "CommonInclude.h"
 #include "wiLua.h"
 #include "wiLuna.h"
-#include <DirectXMath.h>
-#include "CommonInclude.h"
 
 class Vector_BindLua
 {
@@ -15,7 +14,6 @@ public:
 
 	Vector_BindLua(const DirectX::XMVECTOR& vector);
 	Vector_BindLua(lua_State* L);
-	~Vector_BindLua();
 
 	int GetX(lua_State* L);
 	int GetY(lua_State* L);
@@ -28,6 +26,8 @@ public:
 	int SetW(lua_State* L);
 
 	int Transform(lua_State* L);
+	int TransformNormal(lua_State* L);
+	int TransformCoord(lua_State* L);
 	int Length(lua_State* L);
 	int Normalize(lua_State* L);
 	int QuaternionNormalize(lua_State* L);

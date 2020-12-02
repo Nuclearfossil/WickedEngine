@@ -1,121 +1,67 @@
 #pragma once 
 #include "CommonInclude.h"
-#include "wiGraphicsAPI.h"
-#include "ShaderInterop.h"
+#include "wiGraphicsDevice.h"
 #include "wiColor.h"
 
+#include <string>
 
 // Do not alter order because it is bound to lua manually
 enum wiFontAlign
 {
 	WIFALIGN_LEFT,
-	// same as mid
 	WIFALIGN_CENTER,
-	// same as center
-	WIFALIGN_MID,
 	WIFALIGN_RIGHT,
 	WIFALIGN_TOP,
-	WIFALIGN_BOTTOM,
-	WIFALIGN_COUNT,
+	WIFALIGN_BOTTOM
 };
 
-class wiFontProps
+static const int WIFONTSIZE_DEFAULT = 16;
+
+struct wiFontParams
 {
-public:
-	int size;
-	int spacingX, spacingY;
-	int posX, posY;
+	float posX, posY;
+	int size = WIFONTSIZE_DEFAULT; // line height in DPI scaled units
+	float scaling = 1;
+	float spacingX = 1, spacingY = 1; // minimum spacing between characters
 	wiFontAlign h_align, v_align;
 	wiColor color;
 	wiColor shadowColor;
+	float h_wrap = -1; // wrap start width (-1 default for no wrap)
+	int style = 0;
 
-	wiFontProps(int posX = 0, int posY = 0, int size = -1, wiFontAlign h_align = WIFALIGN_LEFT, wiFontAlign v_align = WIFALIGN_TOP
-		, int spacingX = 2, int spacingY = 1, const wiColor& color = wiColor(255, 255, 255, 255), const wiColor& shadowColor = wiColor(0,0,0,0))
-		:posX(posX), posY(posY), size(size), h_align(h_align), v_align(v_align), spacingX(spacingX), spacingY(spacingY), color(color), shadowColor(shadowColor)
+	wiFontParams(float posX = 0, float posY = 0, int size = WIFONTSIZE_DEFAULT, wiFontAlign h_align = WIFALIGN_LEFT, wiFontAlign v_align = WIFALIGN_TOP
+		, wiColor color = wiColor(255, 255, 255, 255), wiColor shadowColor = wiColor(0,0,0,0))
+		:posX(posX), posY(posY), size(size), h_align(h_align), v_align(v_align), color(color), shadowColor(shadowColor)
 	{}
 };
 
-class wiFont
+namespace wiFont
 {
-public:
-	static std::string FONTPATH;
-protected:
-	struct Vertex
-	{
-		XMFLOAT2 Pos;
-		XMHALF2 Tex;
-	};
-	static wiGraphicsTypes::GPURingBuffer       *vertexBuffer;
-	static wiGraphicsTypes::GPUBuffer           *indexBuffer;
+	void Initialize();
 
-	static wiGraphicsTypes::VertexLayout		*vertexLayout;
-	static wiGraphicsTypes::VertexShader		*vertexShader;
-	static wiGraphicsTypes::PixelShader			*pixelShader;
-	static wiGraphicsTypes::BlendState			*blendState;
-	static wiGraphicsTypes::RasterizerState		*rasterizerState;
-	static wiGraphicsTypes::DepthStencilState	*depthStencilState;
-	static wiGraphicsTypes::GraphicsPSO			*PSO;
-	
-	static void SetUpStates();
-public:
-	static void LoadShaders();
-private:
-	static void LoadVertexBuffer();
-	static void LoadIndices();
+	const wiGraphics::Texture* GetAtlas();
 
+	// Returns the font directory
+	const std::string& GetFontPath();
+	// Sets the font directory
+	void SetFontPath(const std::string& path);
 
+	// Create a font. Returns fontStyleID that is reusable. If font already exists, just return its ID
+	int AddFontStyle(const std::string& fontName);
 
-	struct wiFontStyle{
-		std::string name;
-		wiGraphicsTypes::Texture2D* texture;
-		
-		struct LookUp{
-			int ascii;
-			char character;
-			float left;
-			float right;
-			int pixelWidth;
-		};
-		LookUp lookup[128];
-		int texWidth, texHeight;
-		int lineHeight;
+	void Draw(const char* text, const wiFontParams& params, wiGraphics::CommandList cmd);
+	void Draw(const wchar_t* text, const wiFontParams& params, wiGraphics::CommandList cmd);
+	void Draw(const std::string& text, const wiFontParams& params, wiGraphics::CommandList cmd);
+	void Draw(const std::wstring& text, const wiFontParams& params, wiGraphics::CommandList cmd);
 
-		wiFontStyle(){}
-		wiFontStyle(const std::string& newName);
-		void CleanUp();
-	};
-	static std::vector<wiFontStyle> fontStyles;
+	float textWidth(const char* text, const wiFontParams& params);
+	float textWidth(const wchar_t* text, const wiFontParams& params);
+	float textWidth(const std::string& text, const wiFontParams& params);
+	float textWidth(const std::wstring& text, const wiFontParams& params);
 
+	float textHeight(const char* text, const wiFontParams& params);
+	float textHeight(const wchar_t* text, const wiFontParams& params);
+	float textHeight(const std::string& text, const wiFontParams& params);
+	float textHeight(const std::wstring& text, const wiFontParams& params);
 
-	static void ModifyGeo(volatile Vertex* vertexList, const std::wstring& text, wiFontProps props, int style);
-
-public:
-	static void Initialize();
-	static void SetUpStaticComponents();
-	static void CleanUpStatic();
-
-	std::wstring text;
-	wiFontProps props;
-	int style;
-
-	wiFont(const std::string& text = "", wiFontProps props = wiFontProps(), int style = 0);
-	wiFont(const std::wstring& text, wiFontProps props = wiFontProps(), int style = 0);
-	~wiFont();
-
-	
-	void Draw(GRAPHICSTHREAD threadID);
-
-
-	int textWidth();
-	int textHeight();
-
-	static void addFontStyle( const std::string& toAdd );
-	static int getFontStyleByName( const std::string& get );
-
-	void SetText(const std::string& text);
-	void SetText(const std::wstring& text);
-	std::wstring GetText();
-	std::string GetTextA();
-
-	void CleanUp();
 };

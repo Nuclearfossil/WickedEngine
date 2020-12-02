@@ -1,38 +1,33 @@
 #pragma once
+#include "WickedEngine.h"
 
-struct Object;
+class EditorComponent;
 
-class wiGUI;
-class wiWindow;
-class wiLabel;
-class wiCheckBox;
-class wiSlider;
-class wiComboBox;
-class wiColorPicker;
-
-class ObjectWindow
+class ObjectWindow : public wiWindow
 {
 public:
-	ObjectWindow(wiGUI* gui);
-	~ObjectWindow();
+	void Create(EditorComponent* editor);
 
-	void SetObject(Object* obj);
+	EditorComponent* editor;
+	wiECS::Entity entity;
+	void SetEntity(wiECS::Entity entity);
 
-	Object* object;
+	wiLabel nameLabel;
+	wiCheckBox renderableCheckBox;
+	wiSlider ditherSlider;
+	wiSlider cascadeMaskSlider;
+	wiColorPicker colorPicker;
 
-	wiGUI* GUI;
+	wiLabel physicsLabel;
+	wiCheckBox rigidBodyCheckBox;
+	wiCheckBox disabledeactivationCheckBox;
+	wiCheckBox kinematicCheckBox;
+	wiComboBox collisionShapeComboBox;
 
-	wiWindow*	objectWindow;
-
-	wiCheckBox* renderableCheckBox;
-	wiSlider*	ditherSlider;
-	wiSlider*	cascadeMaskSlider;
-	wiColorPicker* colorPicker;
-
-	wiLabel*	physicsLabel;
-	wiComboBox*	simulationTypeComboBox;
-	wiCheckBox* kinematicCheckBox;
-	wiComboBox*	physicsTypeComboBox;
-	wiComboBox*	collisionShapeComboBox;
+	wiSlider lightmapResolutionSlider;
+	wiComboBox lightmapSourceUVSetComboBox;
+	wiButton generateLightmapButton;
+	wiButton stopLightmapGenButton;
+	wiButton clearLightmapButton;
 };
 

@@ -1,62 +1,57 @@
 #pragma once
+#include "WickedEngine.h"
 
-struct Object;
-class wiEmittedParticle;
-
-class wiGUI;
-class wiWindow;
-class wiLabel;
-class wiCheckBox;
-class wiSlider;
-class wiComboBox;
-class wiColorPicker;
+class EditorComponent;
 
 class MaterialWindow;
 
-class EmitterWindow
+class EmitterWindow : public wiWindow
 {
 public:
-	EmitterWindow(wiGUI* gui);
-	~EmitterWindow();
+	void Create(EditorComponent* editor);
 
-	void SetObject(Object* obj);
-	void SetMaterialWnd(MaterialWindow* wnd);
+	wiECS::Entity entity;
+	void SetEntity(wiECS::Entity entity);
+
 	void UpdateData();
 
-	Object* object;
-	wiEmittedParticle* GetEmitter();
+	wiScene::wiEmittedParticle* GetEmitter();
 
-	wiGUI* GUI;
-	MaterialWindow* materialWnd;
+	wiTextInputField emitterNameField;
+	wiButton addButton;
+	wiButton restartButton;
+	wiComboBox meshComboBox;
+	wiComboBox shaderTypeComboBox;
+	wiLabel infoLabel;
+	wiSlider maxParticlesSlider;
+	wiCheckBox sortCheckBox;
+	wiCheckBox depthCollisionsCheckBox;
+	wiCheckBox sphCheckBox;
+	wiCheckBox pauseCheckBox;
+	wiCheckBox debugCheckBox;
+	wiCheckBox volumeCheckBox;
+	wiCheckBox frameBlendingCheckBox;
+	wiSlider emitCountSlider;
+	wiSlider emitSizeSlider;
+	wiSlider emitRotationSlider;
+	wiSlider emitNormalSlider;
+	wiSlider emitScalingSlider;
+	wiSlider emitLifeSlider;
+	wiSlider emitRandomnessSlider;
+	wiSlider emitLifeRandomnessSlider;
+	wiSlider emitMotionBlurSlider;
+	wiSlider emitMassSlider;
+	wiSlider timestepSlider;
+	wiSlider sph_h_Slider;
+	wiSlider sph_K_Slider;
+	wiSlider sph_p0_Slider;
+	wiSlider sph_e_Slider;
 
-	wiWindow*	emitterWindow;
-
-	wiComboBox* emitterComboBox;
-	wiComboBox* shaderTypeComboBox;
-	wiLabel* infoLabel;
-	wiSlider* maxParticlesSlider;
-	wiCheckBox* sortCheckBox;
-	wiCheckBox* depthCollisionsCheckBox;
-	wiCheckBox* sphCheckBox;
-	wiCheckBox* pauseCheckBox;
-	wiCheckBox* debugCheckBox;
-	wiSlider* emitCountSlider;
-	wiSlider* emitSizeSlider;
-	wiSlider* emitRotationSlider;
-	wiSlider* emitNormalSlider;
-	wiSlider* emitScalingSlider;
-	wiSlider* emitLifeSlider;
-	wiSlider* emitRandomnessSlider;
-	wiSlider* emitLifeRandomnessSlider;
-	wiSlider* emitMotionBlurSlider;
-	wiSlider* emitMassSlider;
-	wiSlider* timestepSlider;
-	wiSlider* sph_h_Slider;
-	wiSlider* sph_K_Slider;
-	wiSlider* sph_p0_Slider;
-	wiSlider* sph_e_Slider;
-	wiButton* materialSelectButton;
-	wiButton* restartButton;
+	wiTextInputField frameRateInput;
+	wiTextInputField framesXInput;
+	wiTextInputField framesYInput;
+	wiTextInputField frameCountInput;
+	wiTextInputField frameStartInput;
 
 };
 

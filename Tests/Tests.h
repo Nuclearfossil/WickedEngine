@@ -1,20 +1,27 @@
 #pragma once
 #include "WickedEngine.h"
 
-class Tests : public MainComponent
-{
-public:
-	Tests();
-	virtual ~Tests();
 
-	virtual void Initialize() override;
+class TestsRenderer : public RenderPath3D
+{
+	wiLabel label;
+	wiComboBox testSelector;
+	wiECS::Entity ik_entity = wiECS::INVALID_ENTITY;
+public:
+	void Load() override;
+	void Update(float dt) override;
+	void ResizeLayout() override;
+
+	void RunJobSystemTest();
+	void RunFontTest();
+	void RunSpriteTest();
+	void RunNetworkTest();
 };
 
-
-class TestsRenderer : public DeferredRenderableComponent
+class Tests : public MainComponent
 {
-public: 
-	TestsRenderer();
-	virtual ~TestsRenderer();
+	TestsRenderer renderer;
+public:
+	void Initialize() override;
 };
 

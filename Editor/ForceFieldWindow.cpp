@@ -1,30 +1,60 @@
 #include "stdafx.h"
 #include "ForceFieldWindow.h"
+#include "Editor.h"
+
+using namespace wiECS;
+using namespace wiScene;
 
 
-ForceFieldWindow::ForceFieldWindow(wiGUI* gui) : GUI(gui)
+void ForceFieldWindow::Create(EditorComponent* editor)
 {
-	assert(GUI && "Invalid GUI!");
-
-	force = nullptr;
-
-
-	float screenW = (float)wiRenderer::GetDevice()->GetScreenWidth();
-	float screenH = (float)wiRenderer::GetDevice()->GetScreenHeight();
-
-	forceFieldWindow = new wiWindow(GUI, "Force Field Window");
-	forceFieldWindow->SetSize(XMFLOAT2(600, 300));
-	forceFieldWindow->SetEnabled(false);
-	GUI->AddWidget(forceFieldWindow);
+	wiWindow::Create("Force Field Window");
+	SetSize(XMFLOAT2(420, 120));
 
 	float x = 150;
 	float y = 10;
-	float step = 35;
+	float hei = 18;
+	float step = hei + 2;
 
-	typeComboBox = new wiComboBox("Force Field type: ");
-	typeComboBox->SetPos(XMFLOAT2(x, y += step));
-	typeComboBox->SetSize(XMFLOAT2(300, 25));
-	typeComboBox->OnSelect([&](wiEventArgs args) {
+	addButton.Create("Add Force Field");
+	addButton.SetSize(XMFLOAT2(150, hei));
+	addButton.SetPos(XMFLOAT2(x, y += step));
+	addButton.OnClick([=](wiEventArgs args) {
+		Entity entity = wiScene::GetScene().Entity_CreateForce("editorForce");
+		ForceFieldComponent* force = wiScene::GetScene().forces.GetComponent(entity);
+		if (force != nullptr)
+		{
+			switch (typeComboBox.GetSelected())
+			{
+			case 0:
+				force->type = ENTITY_TYPE_FORCEFIELD_POINT;
+				break;
+			case 1:
+				force->type = ENTITY_TYPE_FORCEFIELD_PLANE;
+				break;
+			default:
+				assert(0);
+				break;
+			}
+			editor->ClearSelected();
+			editor->AddSelected(entity);
+			editor->RefreshSceneGraphView();
+			SetEntity(entity);
+		}
+		else
+		{
+			assert(0);
+		}
+		});
+	addButton.SetEnabled(true);
+	addButton.SetTooltip("Add new Force Field to the simulation.");
+	AddWidget(&addButton);
+
+	typeComboBox.Create("Force Field type: ");
+	typeComboBox.SetPos(XMFLOAT2(x, y += step));
+	typeComboBox.SetSize(XMFLOAT2(200, hei));
+	typeComboBox.OnSelect([&](wiEventArgs args) {
+		ForceFieldComponent* force = wiScene::GetScene().forces.GetComponent(entity);
 		if (force != nullptr && args.iValue >= 0)
 		{
 			switch (args.iValue)
@@ -41,83 +71,71 @@ ForceFieldWindow::ForceFieldWindow(wiGUI* gui) : GUI(gui)
 			}
 		}
 	});
-	typeComboBox->AddItem("Point");
-	typeComboBox->AddItem("Plane");
-	typeComboBox->SetEnabled(false);
-	typeComboBox->SetTooltip("Choose the force field type.");
-	forceFieldWindow->AddWidget(typeComboBox);
+	typeComboBox.AddItem("Point");
+	typeComboBox.AddItem("Plane");
+	typeComboBox.SetEnabled(false);
+	typeComboBox.SetTooltip("Choose the force field type.");
+	AddWidget(&typeComboBox);
 
 
-	gravitySlider = new wiSlider(-10, 10, 0, 100000, "Gravity: ");
-	gravitySlider->SetSize(XMFLOAT2(200, 30));
-	gravitySlider->SetPos(XMFLOAT2(x, y += step));
-	gravitySlider->OnSlide([&](wiEventArgs args) {
+	gravitySlider.Create(-10, 10, 0, 100000, "Gravity: ");
+	gravitySlider.SetSize(XMFLOAT2(200, hei));
+	gravitySlider.SetPos(XMFLOAT2(x, y += step));
+	gravitySlider.OnSlide([&](wiEventArgs args) {
+		ForceFieldComponent* force = wiScene::GetScene().forces.GetComponent(entity);
 		if (force != nullptr)
 		{
 			force->gravity = args.fValue;
 		}
 	});
-	gravitySlider->SetEnabled(false);
-	gravitySlider->SetTooltip("Set the amount of gravity. Positive values attract, negatives deflect.");
-	forceFieldWindow->AddWidget(gravitySlider);
+	gravitySlider.SetEnabled(false);
+	gravitySlider.SetTooltip("Set the amount of gravity. Positive values attract, negatives deflect.");
+	AddWidget(&gravitySlider);
 
 
-	rangeSlider = new wiSlider(0.0f, 100.0f, 10, 100000, "Range: ");
-	rangeSlider->SetSize(XMFLOAT2(200, 30));
-	rangeSlider->SetPos(XMFLOAT2(x, y += step));
-	rangeSlider->OnSlide([&](wiEventArgs args) {
+	rangeSlider.Create(0.0f, 100.0f, 10, 100000, "Range: ");
+	rangeSlider.SetSize(XMFLOAT2(200, hei));
+	rangeSlider.SetPos(XMFLOAT2(x, y += step));
+	rangeSlider.OnSlide([&](wiEventArgs args) {
+		ForceFieldComponent* force = wiScene::GetScene().forces.GetComponent(entity);
 		if (force != nullptr)
 		{
-			force->range = args.fValue;
+			force->range_local = args.fValue;
 		}
 	});
-	rangeSlider->SetEnabled(false);
-	rangeSlider->SetTooltip("Set the range of affection.");
-	forceFieldWindow->AddWidget(rangeSlider);
-
-
-	addButton = new wiButton("Add Force Field");
-	addButton->SetSize(XMFLOAT2(150, 30));
-	addButton->SetPos(XMFLOAT2(x, y += step * 2));
-	addButton->OnClick([](wiEventArgs args) {
-		wiRenderer::Add(new ForceField);
-	});
-	addButton->SetEnabled(true);
-	addButton->SetTooltip("Add new Force Field to the simulation.");
-	forceFieldWindow->AddWidget(addButton);
+	rangeSlider.SetEnabled(false);
+	rangeSlider.SetTooltip("Set the range of affection.");
+	AddWidget(&rangeSlider);
 
 
 
-	forceFieldWindow->Translate(XMFLOAT3(810, 50, 0));
-	forceFieldWindow->SetVisible(false);
+	Translate(XMFLOAT3((float)wiRenderer::GetDevice()->GetScreenWidth() - 720, 50, 0));
+	SetVisible(false);
 
-	SetForceField(nullptr);
+	SetEntity(INVALID_ENTITY);
 }
 
-
-ForceFieldWindow::~ForceFieldWindow()
+void ForceFieldWindow::SetEntity(Entity entity)
 {
-}
+	this->entity = entity;
 
-void ForceFieldWindow::SetForceField(ForceField* force)
-{
-	if (this->force == force)
-		return;
-
-	this->force = force;
+	const ForceFieldComponent* force = wiScene::GetScene().forces.GetComponent(entity);
 
 	if (force != nullptr)
 	{
-		typeComboBox->SetSelected(force->type == ENTITY_TYPE_FORCEFIELD_POINT ? 0 : 1);
-		gravitySlider->SetValue(force->gravity);
-		rangeSlider->SetValue(force->range);
+		typeComboBox.SetSelected(force->type == ENTITY_TYPE_FORCEFIELD_POINT ? 0 : 1);
+		gravitySlider.SetValue(force->gravity);
+		rangeSlider.SetValue(force->range_local);
 
-		forceFieldWindow->SetEnabled(true);
+		gravitySlider.SetEnabled(true);
+		rangeSlider.SetEnabled(true);
+
 	}
 	else
 	{
-		forceFieldWindow->SetEnabled(false);
+		gravitySlider.SetEnabled(false);
+		rangeSlider.SetEnabled(false);
 	}
 
-	addButton->SetEnabled(true);
+	addButton.SetEnabled(true);
 }

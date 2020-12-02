@@ -1,244 +1,420 @@
 #include "stdafx.h"
 #include "PostprocessWindow.h"
+#include "Editor.h"
 
 #include <thread>
-#include <Commdlg.h> // openfile
-#include <WinBase.h>
 
 using namespace std;
-using namespace wiGraphicsTypes;
+using namespace wiGraphics;
 
 
-PostprocessWindow::PostprocessWindow(wiGUI* gui, Renderable3DComponent* comp) : GUI(gui), component(comp)
+void PostprocessWindow::Create(EditorComponent* editor)
 {
-	assert(component && "PostprocessWnd invalid component!");
-	assert(GUI && "Invalid GUI!");
+	wiWindow::Create("PostProcess Window");
+	SetSize(XMFLOAT2(420, 520));
 
-	float screenW = (float)wiRenderer::GetDevice()->GetScreenWidth();
-	float screenH = (float)wiRenderer::GetDevice()->GetScreenHeight();
+	float x = 150;
+	float y = 10;
+	float hei = 18;
+	float step = hei + 2;
 
-	ppWindow = new wiWindow(GUI, "PostProcess Window");
-	ppWindow->SetSize(XMFLOAT2(360, 520));
-	GUI->AddWidget(ppWindow);
-
-	float x = 110;
-	float y = 0;
-
-	lensFlareCheckBox = new wiCheckBox("LensFlare: ");
-	lensFlareCheckBox->SetTooltip("Toggle visibility of light source flares. Additional setup needed per light for a lensflare to be visible.");
-	lensFlareCheckBox->SetScriptTip("Renderable3DComponent::SetLensFlareEnabled(bool value)");
-	lensFlareCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	lensFlareCheckBox->SetCheck(component->getLensFlareEnabled());
-	lensFlareCheckBox->OnClick([&](wiEventArgs args) {
-		component->setLensFlareEnabled(args.bValue);
+	exposureSlider.Create(0.0f, 3.0f, 1, 10000, "Exposure: ");
+	exposureSlider.SetTooltip("Set the tonemap exposure value");
+	exposureSlider.SetScriptTip("RenderPath3D::SetExposure(float value)");
+	exposureSlider.SetSize(XMFLOAT2(100, hei));
+	exposureSlider.SetPos(XMFLOAT2(x, y += step));
+	exposureSlider.SetValue(editor->renderPath->getExposure());
+	exposureSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setExposure(args.fValue);
 	});
-	ppWindow->AddWidget(lensFlareCheckBox);
+	AddWidget(&exposureSlider);
 
-	lightShaftsCheckBox = new wiCheckBox("LightShafts: ");
-	lightShaftsCheckBox->SetTooltip("Enable light shaft for directional light sources.");
-	lightShaftsCheckBox->SetScriptTip("Renderable3DComponent::SetLightShaftsEnabled(bool value)");
-	lightShaftsCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	lightShaftsCheckBox->SetCheck(component->getLightShaftsEnabled());
-	lightShaftsCheckBox->OnClick([&](wiEventArgs args) {
-		component->setLightShaftsEnabled(args.bValue);
+	lensFlareCheckBox.Create("LensFlare: ");
+	lensFlareCheckBox.SetTooltip("Toggle visibility of light source flares. Additional setup needed per light for a lensflare to be visible.");
+	lensFlareCheckBox.SetScriptTip("RenderPath3D::SetLensFlareEnabled(bool value)");
+	lensFlareCheckBox.SetSize(XMFLOAT2(hei, hei));
+	lensFlareCheckBox.SetPos(XMFLOAT2(x, y += step));
+	lensFlareCheckBox.SetCheck(editor->renderPath->getLensFlareEnabled());
+	lensFlareCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setLensFlareEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(lightShaftsCheckBox);
+	AddWidget(&lensFlareCheckBox);
 
-	ssaoCheckBox = new wiCheckBox("SSAO: ");
-	ssaoCheckBox->SetTooltip("Enable Screen Space Ambient Occlusion.");
-	ssaoCheckBox->SetScriptTip("Renderable3DComponent::SetSSAOEnabled(bool value)");
-	ssaoCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	ssaoCheckBox->SetCheck(component->getSSAOEnabled());
-	ssaoCheckBox->OnClick([&](wiEventArgs args) {
-		component->setSSAOEnabled(args.bValue);
+	lightShaftsCheckBox.Create("LightShafts: ");
+	lightShaftsCheckBox.SetTooltip("Enable light shaft for directional light sources.");
+	lightShaftsCheckBox.SetScriptTip("RenderPath3D::SetLightShaftsEnabled(bool value)");
+	lightShaftsCheckBox.SetSize(XMFLOAT2(hei, hei));
+	lightShaftsCheckBox.SetPos(XMFLOAT2(x, y += step));
+	lightShaftsCheckBox.SetCheck(editor->renderPath->getLightShaftsEnabled());
+	lightShaftsCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setLightShaftsEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(ssaoCheckBox);
+	AddWidget(&lightShaftsCheckBox);
 
-	ssrCheckBox = new wiCheckBox("SSR: ");
-	ssrCheckBox->SetTooltip("Enable Screen Space Reflections.");
-	ssrCheckBox->SetScriptTip("Renderable3DComponent::SetSSREnabled(bool value)");
-	ssrCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	ssrCheckBox->SetCheck(component->getSSREnabled());
-	ssrCheckBox->OnClick([&](wiEventArgs args) {
-		component->setSSREnabled(args.bValue);
+	volumetricCloudsCheckBox.Create("Volumetric clouds: ");
+	volumetricCloudsCheckBox.SetTooltip("Enable volumetric cloud rendering.");
+	volumetricCloudsCheckBox.SetSize(XMFLOAT2(hei, hei));
+	volumetricCloudsCheckBox.SetPos(XMFLOAT2(x, y += step));
+	volumetricCloudsCheckBox.SetCheck(editor->renderPath->getVolumetricCloudsEnabled());
+	volumetricCloudsCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setVolumetricCloudsEnabled(args.bValue);
+		});
+	AddWidget(&volumetricCloudsCheckBox);
+
+	aoComboBox.Create("AO: ");
+	aoComboBox.SetTooltip("Choose Ambient Occlusion type. RTAO is only available if hardware supports ray tracing");
+	aoComboBox.SetScriptTip("RenderPath3D::SetAO(int value)");
+	aoComboBox.SetSize(XMFLOAT2(150, hei));
+	aoComboBox.SetPos(XMFLOAT2(x, y += step));
+	aoComboBox.AddItem("Disabled");
+	aoComboBox.AddItem("SSAO");
+	aoComboBox.AddItem("HBAO");
+	aoComboBox.AddItem("MSAO");
+	if (wiRenderer::GetDevice()->CheckCapability(GRAPHICSDEVICE_CAPABILITY_RAYTRACING))
+	{
+		aoComboBox.AddItem("RTAO");
+	}
+	aoComboBox.SetSelected(editor->renderPath->getAO());
+	aoComboBox.OnSelect([=](wiEventArgs args) {
+		editor->renderPath->setAO((RenderPath3D::AO)args.iValue);
+
+		switch (editor->renderPath->getAO())
+		{
+		case RenderPath3D::AO_SSAO:
+			aoRangeSlider.SetEnabled(true); 
+			aoRangeSlider.SetValue(2.0f);
+			aoSampleCountSlider.SetEnabled(true); 
+			aoSampleCountSlider.SetValue(9.0f);
+			break;
+		case RenderPath3D::AO_RTAO:
+			aoRangeSlider.SetEnabled(true); 
+			aoRangeSlider.SetValue(10.0f);
+			aoSampleCountSlider.SetEnabled(true); 
+			aoSampleCountSlider.SetValue(2.0f);
+			break;
+		default:
+			aoRangeSlider.SetEnabled(false);
+			aoSampleCountSlider.SetEnabled(false);
+			break;
+		}
+
+		editor->renderPath->setAORange(aoRangeSlider.GetValue());
+		editor->renderPath->setAOSampleCount((uint32_t)aoSampleCountSlider.GetValue());
 	});
-	ppWindow->AddWidget(ssrCheckBox);
+	AddWidget(&aoComboBox);
 
-	sssCheckBox = new wiCheckBox("SSS: ");
-	sssCheckBox->SetTooltip("Enable Subsurface Scattering. (Deferred only for now)");
-	sssCheckBox->SetScriptTip("Renderable3DComponent::SetSSSEnabled(bool value)");
-	sssCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	sssCheckBox->SetCheck(component->getSSSEnabled());
-	sssCheckBox->OnClick([&](wiEventArgs args) {
-		component->setSSSEnabled(args.bValue);
+	aoPowerSlider.Create(0.25f, 8.0f, 2, 1000, "Power: ");
+	aoPowerSlider.SetTooltip("Set SSAO Power. Higher values produce darker, more pronounced effect");
+	aoPowerSlider.SetSize(XMFLOAT2(100, hei));
+	aoPowerSlider.SetPos(XMFLOAT2(x + 100, y += step));
+	aoPowerSlider.SetValue((float)editor->renderPath->getAOPower());
+	aoPowerSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setAOPower(args.fValue);
+		});
+	AddWidget(&aoPowerSlider);
+
+	aoRangeSlider.Create(1.0f, 100.0f, 1, 1000, "Range: ");
+	aoRangeSlider.SetTooltip("Set AO ray length. Only for SSAO and RTAO");
+	aoRangeSlider.SetSize(XMFLOAT2(100, hei));
+	aoRangeSlider.SetPos(XMFLOAT2(x + 100, y += step));
+	aoRangeSlider.SetValue((float)editor->renderPath->getAOPower());
+	aoRangeSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setAORange(args.fValue);
+		});
+	AddWidget(&aoRangeSlider);
+
+	aoSampleCountSlider.Create(1, 16, 9, 15, "Sample Count: ");
+	aoSampleCountSlider.SetTooltip("Set AO ray count. Only for SSAO and RTAO");
+	aoSampleCountSlider.SetSize(XMFLOAT2(100, hei));
+	aoSampleCountSlider.SetPos(XMFLOAT2(x + 100, y += step));
+	aoSampleCountSlider.SetValue((float)editor->renderPath->getAOPower());
+	aoSampleCountSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setAOSampleCount(args.iValue);
+		});
+	AddWidget(&aoSampleCountSlider);
+
+	ssrCheckBox.Create("SSR: ");
+	ssrCheckBox.SetTooltip("Enable Screen Space Reflections.");
+	ssrCheckBox.SetScriptTip("RenderPath3D::SetSSREnabled(bool value)");
+	ssrCheckBox.SetSize(XMFLOAT2(hei, hei));
+	ssrCheckBox.SetPos(XMFLOAT2(x, y += step));
+	ssrCheckBox.SetCheck(editor->renderPath->getSSREnabled());
+	ssrCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setSSREnabled(args.bValue);
 	});
-	ppWindow->AddWidget(sssCheckBox);
+	AddWidget(&ssrCheckBox);
 
-	eyeAdaptionCheckBox = new wiCheckBox("EyeAdaption: ");
-	eyeAdaptionCheckBox->SetTooltip("Enable eye adaption for the overall screen luminance");
-	eyeAdaptionCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	eyeAdaptionCheckBox->SetCheck(component->getEyeAdaptionEnabled());
-	eyeAdaptionCheckBox->OnClick([&](wiEventArgs args) {
-		component->setEyeAdaptionEnabled(args.bValue);
+	raytracedReflectionsCheckBox.Create("Ray Traced Reflections: ");
+	raytracedReflectionsCheckBox.SetTooltip("Enable Ray Traced Reflections. Only if GPU supports raytracing.");
+	raytracedReflectionsCheckBox.SetScriptTip("RenderPath3D::SetRaytracedReflectionsEnabled(bool value)");
+	raytracedReflectionsCheckBox.SetSize(XMFLOAT2(hei, hei));
+	raytracedReflectionsCheckBox.SetPos(XMFLOAT2(x + 200, y));
+	raytracedReflectionsCheckBox.SetCheck(editor->renderPath->getRaytracedReflectionEnabled());
+	raytracedReflectionsCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setRaytracedReflectionsEnabled(args.bValue);
+		});
+	AddWidget(&raytracedReflectionsCheckBox);
+	raytracedReflectionsCheckBox.SetEnabled(wiRenderer::GetDevice()->CheckCapability(GRAPHICSDEVICE_CAPABILITY_RAYTRACING));
+
+	sssCheckBox.Create("SSS: ");
+	sssCheckBox.SetTooltip("Enable Subsurface Scattering. Only for PBR shaders.");
+	sssCheckBox.SetScriptTip("RenderPath3D::SetSSSEnabled(bool value)");
+	sssCheckBox.SetSize(XMFLOAT2(hei, hei));
+	sssCheckBox.SetPos(XMFLOAT2(x, y += step));
+	sssCheckBox.SetCheck(editor->renderPath->getSSSEnabled());
+	sssCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setSSSEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(eyeAdaptionCheckBox);
+	AddWidget(&sssCheckBox);
 
-	motionBlurCheckBox = new wiCheckBox("MotionBlur: ");
-	motionBlurCheckBox->SetTooltip("Enable motion blur for camera movement and animated meshes.");
-	motionBlurCheckBox->SetScriptTip("Renderable3DComponent::SetMotionBlurEnabled(bool value)");
-	motionBlurCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	motionBlurCheckBox->SetCheck(component->getMotionBlurEnabled());
-	motionBlurCheckBox->OnClick([&](wiEventArgs args) {
-		component->setMotionBlurEnabled(args.bValue);
+	sssSlider.Create(0.0f, 2.0f, 1, 1000, "Amount: ");
+	sssSlider.SetTooltip("Set SSS amount for subsurface materials.");
+	sssSlider.SetSize(XMFLOAT2(100, hei));
+	sssSlider.SetPos(XMFLOAT2(x + 100, y));
+	sssSlider.SetValue((float)editor->renderPath->getSSSBlurAmount());
+	sssSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setSSSBlurAmount(args.fValue);
+		});
+	AddWidget(&sssSlider);
+
+	eyeAdaptionCheckBox.Create("EyeAdaption: ");
+	eyeAdaptionCheckBox.SetTooltip("Enable eye adaption for the overall screen luminance");
+	eyeAdaptionCheckBox.SetSize(XMFLOAT2(hei, hei));
+	eyeAdaptionCheckBox.SetPos(XMFLOAT2(x, y += step));
+	eyeAdaptionCheckBox.SetCheck(editor->renderPath->getEyeAdaptionEnabled());
+	eyeAdaptionCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setEyeAdaptionEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(motionBlurCheckBox);
+	AddWidget(&eyeAdaptionCheckBox);
 
-	depthOfFieldCheckBox = new wiCheckBox("DepthOfField: ");
-	depthOfFieldCheckBox->SetTooltip("Enable Depth of field effect. Additional focus and strength setup required.");
-	depthOfFieldCheckBox->SetScriptTip("Renderable3DComponent::SetDepthOfFieldEnabled(bool value)");
-	depthOfFieldCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	depthOfFieldCheckBox->SetCheck(component->getDepthOfFieldEnabled());
-	depthOfFieldCheckBox->OnClick([&](wiEventArgs args) {
-		component->setDepthOfFieldEnabled(args.bValue);
+	motionBlurCheckBox.Create("MotionBlur: ");
+	motionBlurCheckBox.SetTooltip("Enable motion blur for camera movement and animated meshes.");
+	motionBlurCheckBox.SetScriptTip("RenderPath3D::SetMotionBlurEnabled(bool value)");
+	motionBlurCheckBox.SetSize(XMFLOAT2(hei, hei));
+	motionBlurCheckBox.SetPos(XMFLOAT2(x, y += step));
+	motionBlurCheckBox.SetCheck(editor->renderPath->getMotionBlurEnabled());
+	motionBlurCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setMotionBlurEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(depthOfFieldCheckBox);
+	AddWidget(&motionBlurCheckBox);
 
-	depthOfFieldFocusSlider = new wiSlider(0.01f, 600, 100, 10000, "Focus: ");
-	depthOfFieldFocusSlider->SetTooltip("Set the focus distance from the camera. The picture will be sharper near the focus, and blurrier further from it.");
-	depthOfFieldFocusSlider->SetScriptTip("Renderable3DComponent::SetDepthOfFieldFocus(float value)");
-	depthOfFieldFocusSlider->SetSize(XMFLOAT2(100, 20));
-	depthOfFieldFocusSlider->SetPos(XMFLOAT2(x + 100, y));
-	depthOfFieldFocusSlider->SetValue(component->getDepthOfFieldFocus());
-	depthOfFieldFocusSlider->OnSlide([&](wiEventArgs args) {
-		component->setDepthOfFieldFocus(args.fValue);
+	motionBlurStrengthSlider.Create(0.1f, 400, 100, 10000, "Strength: ");
+	motionBlurStrengthSlider.SetTooltip("Set the camera shutter speed for motion blur (higher value means stronger blur).");
+	motionBlurStrengthSlider.SetScriptTip("RenderPath3D::SetMotionBlurStrength(float value)");
+	motionBlurStrengthSlider.SetSize(XMFLOAT2(100, hei));
+	motionBlurStrengthSlider.SetPos(XMFLOAT2(x + 100, y));
+	motionBlurStrengthSlider.SetValue(editor->renderPath->getMotionBlurStrength());
+	motionBlurStrengthSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setMotionBlurStrength(args.fValue);
+		});
+	AddWidget(&motionBlurStrengthSlider);
+
+	depthOfFieldCheckBox.Create("DepthOfField: ");
+	depthOfFieldCheckBox.SetTooltip("Enable Depth of field effect. Additional focus and strength setup required.");
+	depthOfFieldCheckBox.SetScriptTip("RenderPath3D::SetDepthOfFieldEnabled(bool value)");
+	depthOfFieldCheckBox.SetSize(XMFLOAT2(hei, hei));
+	depthOfFieldCheckBox.SetPos(XMFLOAT2(x, y += step));
+	depthOfFieldCheckBox.SetCheck(editor->renderPath->getDepthOfFieldEnabled());
+	depthOfFieldCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setDepthOfFieldEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(depthOfFieldFocusSlider);
+	AddWidget(&depthOfFieldCheckBox);
 
-	depthOfFieldStrengthSlider = new wiSlider(0.01f, 4, 100, 1000, "Strength: ");
-	depthOfFieldStrengthSlider->SetTooltip("Set depth of field blur strength.");
-	depthOfFieldStrengthSlider->SetScriptTip("Renderable3DComponent::SetDepthOfFieldStrength(float value)");
-	depthOfFieldStrengthSlider->SetSize(XMFLOAT2(100, 20));
-	depthOfFieldStrengthSlider->SetPos(XMFLOAT2(x + 100, y += 35));
-	depthOfFieldStrengthSlider->SetValue(component->getDepthOfFieldStrength());
-	depthOfFieldStrengthSlider->OnSlide([&](wiEventArgs args) {
-		component->setDepthOfFieldStrength(args.fValue);
+	depthOfFieldFocusSlider.Create(1.0f, 100, 10, 10000, "Focus: ");
+	depthOfFieldFocusSlider.SetTooltip("Set the focus distance from the camera. The picture will be sharper near the focus, and blurrier further from it.");
+	depthOfFieldFocusSlider.SetScriptTip("RenderPath3D::SetDepthOfFieldFocus(float value)");
+	depthOfFieldFocusSlider.SetSize(XMFLOAT2(100, hei));
+	depthOfFieldFocusSlider.SetPos(XMFLOAT2(x + 100, y));
+	depthOfFieldFocusSlider.SetValue(editor->renderPath->getDepthOfFieldFocus());
+	depthOfFieldFocusSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setDepthOfFieldFocus(args.fValue);
 	});
-	ppWindow->AddWidget(depthOfFieldStrengthSlider);
+	AddWidget(&depthOfFieldFocusSlider);
 
-	bloomCheckBox = new wiCheckBox("Bloom: ");
-	bloomCheckBox->SetTooltip("Enable bloom. The effect adds color bleeding to the brightest parts of the scene.");
-	bloomCheckBox->SetScriptTip("Renderable3DComponent::SetBloomEnabled(bool value)");
-	bloomCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	bloomCheckBox->SetCheck(component->getBloomEnabled());
-	bloomCheckBox->OnClick([&](wiEventArgs args) {
-		component->setBloomEnabled(args.bValue);
+	depthOfFieldScaleSlider.Create(1.0f, 20, 100, 1000, "Scale: ");
+	depthOfFieldScaleSlider.SetTooltip("Set depth of field scale/falloff.");
+	depthOfFieldScaleSlider.SetScriptTip("RenderPath3D::SetDepthOfFieldStrength(float value)");
+	depthOfFieldScaleSlider.SetSize(XMFLOAT2(100, hei));
+	depthOfFieldScaleSlider.SetPos(XMFLOAT2(x + 100, y += step));
+	depthOfFieldScaleSlider.SetValue(editor->renderPath->getDepthOfFieldStrength());
+	depthOfFieldScaleSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setDepthOfFieldStrength(args.fValue);
 	});
-	ppWindow->AddWidget(bloomCheckBox);
+	AddWidget(&depthOfFieldScaleSlider);
 
-	fxaaCheckBox = new wiCheckBox("FXAA: ");
-	fxaaCheckBox->SetTooltip("Fast Approximate Anti Aliasing. A fast antialiasing method, but can be a bit too blurry.");
-	fxaaCheckBox->SetScriptTip("Renderable3DComponent::SetFXAAEnabled(bool value)");
-	fxaaCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	fxaaCheckBox->SetCheck(component->getFXAAEnabled());
-	fxaaCheckBox->OnClick([&](wiEventArgs args) {
-		component->setFXAAEnabled(args.bValue);
+	depthOfFieldAspectSlider.Create(0.01f, 2, 1, 1000, "Aspect: ");
+	depthOfFieldAspectSlider.SetTooltip("Set depth of field bokeh aspect ratio (width/height).");
+	depthOfFieldAspectSlider.SetScriptTip("RenderPath3D::SetDepthOfFieldAspect(float value)");
+	depthOfFieldAspectSlider.SetSize(XMFLOAT2(100, hei));
+	depthOfFieldAspectSlider.SetPos(XMFLOAT2(x + 100, y += step));
+	depthOfFieldAspectSlider.SetValue(editor->renderPath->getDepthOfFieldAspect());
+	depthOfFieldAspectSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setDepthOfFieldAspect(args.fValue);
+		});
+	AddWidget(&depthOfFieldAspectSlider);
+
+	bloomCheckBox.Create("Bloom: ");
+	bloomCheckBox.SetTooltip("Enable bloom. The effect adds color bleeding to the brightest parts of the scene.");
+	bloomCheckBox.SetScriptTip("RenderPath3D::SetBloomEnabled(bool value)");
+	bloomCheckBox.SetSize(XMFLOAT2(hei, hei));
+	bloomCheckBox.SetPos(XMFLOAT2(x, y += step));
+	bloomCheckBox.SetCheck(editor->renderPath->getBloomEnabled());
+	bloomCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setBloomEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(fxaaCheckBox);
+	AddWidget(&bloomCheckBox);
 
-	colorGradingCheckBox = new wiCheckBox("Color Grading: ");
-	colorGradingCheckBox->SetTooltip("Enable color grading of the final render. An additional lookup texture must be set for it to take effect.");
-	colorGradingCheckBox->SetScriptTip("Renderable3DComponent::SetColorGradingEnabled(bool value)");
-	colorGradingCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	colorGradingCheckBox->SetCheck(component->getColorGradingEnabled());
-	colorGradingCheckBox->OnClick([&](wiEventArgs args) {
-		component->setColorGradingEnabled(args.bValue);
+	bloomStrengthSlider.Create(0.0f, 10, 1, 1000, "Threshold: ");
+	bloomStrengthSlider.SetTooltip("Set bloom threshold. The values below this will not glow on the screen.");
+	bloomStrengthSlider.SetSize(XMFLOAT2(100, hei));
+	bloomStrengthSlider.SetPos(XMFLOAT2(x + 100, y));
+	bloomStrengthSlider.SetValue(editor->renderPath->getBloomThreshold());
+	bloomStrengthSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setBloomThreshold(args.fValue);
 	});
-	ppWindow->AddWidget(colorGradingCheckBox);
+	AddWidget(&bloomStrengthSlider);
 
-	colorGradingButton = new wiButton("Load Color Grading LUT...");
-	colorGradingButton->SetTooltip("Load a color grading lookup texture...");
-	colorGradingButton->SetPos(XMFLOAT2(x + 35, y));
-	colorGradingButton->SetSize(XMFLOAT2(200, 18));
-	colorGradingButton->OnClick([=](wiEventArgs args) {
-		auto x = wiRenderer::GetColorGrading();
+	fxaaCheckBox.Create("FXAA: ");
+	fxaaCheckBox.SetTooltip("Fast Approximate Anti Aliasing. A fast antialiasing method, but can be a bit too blurry.");
+	fxaaCheckBox.SetScriptTip("RenderPath3D::SetFXAAEnabled(bool value)");
+	fxaaCheckBox.SetSize(XMFLOAT2(hei, hei));
+	fxaaCheckBox.SetPos(XMFLOAT2(x, y += step));
+	fxaaCheckBox.SetCheck(editor->renderPath->getFXAAEnabled());
+	fxaaCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setFXAAEnabled(args.bValue);
+	});
+	AddWidget(&fxaaCheckBox);
+
+	colorGradingCheckBox.Create("Color Grading: ");
+	colorGradingCheckBox.SetTooltip("Enable color grading of the final render. An additional lookup texture must be set for it to take effect.");
+	colorGradingCheckBox.SetScriptTip("RenderPath3D::SetColorGradingEnabled(bool value)");
+	colorGradingCheckBox.SetSize(XMFLOAT2(hei, hei));
+	colorGradingCheckBox.SetPos(XMFLOAT2(x, y += step));
+	colorGradingCheckBox.SetCheck(editor->renderPath->getColorGradingEnabled());
+	colorGradingCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setColorGradingEnabled(args.bValue);
+	});
+	AddWidget(&colorGradingCheckBox);
+
+	colorGradingButton.Create("Load Color Grading LUT...");
+	colorGradingButton.SetTooltip("Load a color grading lookup texture...");
+	colorGradingButton.SetPos(XMFLOAT2(x + 35, y));
+	colorGradingButton.SetSize(XMFLOAT2(200, hei));
+	colorGradingButton.OnClick([=](wiEventArgs args) {
+		auto x = editor->renderPath->getColorGradingTexture();
 
 		if (x == nullptr)
 		{
-			thread([&] {
-				char szFile[260];
-
-				OPENFILENAMEA ofn;
-				ZeroMemory(&ofn, sizeof(ofn));
-				ofn.lStructSize = sizeof(ofn);
-				ofn.hwndOwner = nullptr;
-				ofn.lpstrFile = szFile;
-				// Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
-				// use the contents of szFile to initialize itself.
-				ofn.lpstrFile[0] = '\0';
-				ofn.nMaxFile = sizeof(szFile);
-				ofn.lpstrFilter = "Color Grading texture\0*.dds;*.png;*.tga\0";
-				ofn.nFilterIndex = 1;
-				ofn.lpstrFileTitle = NULL;
-				ofn.nMaxFileTitle = 0;
-				ofn.lpstrInitialDir = NULL;
-				ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
-				if (GetOpenFileNameA(&ofn) == TRUE) {
-					string fileName = ofn.lpstrFile;
-					wiRenderer::SetColorGrading((Texture2D*)wiResourceManager::GetGlobal()->add(fileName));
-					colorGradingButton->SetText(fileName);
-				}
-			}).detach();
+			wiHelper::FileDialogParams params;
+			params.type = wiHelper::FileDialogParams::OPEN;
+			params.description = "Texture";
+			params.extensions.push_back("dds");
+			params.extensions.push_back("png");
+			params.extensions.push_back("jpg");
+			params.extensions.push_back("tga");
+			wiHelper::FileDialog(params, [=](std::string fileName) {
+				wiEvent::Subscribe_Once(SYSTEM_EVENT_THREAD_SAFE_POINT, [=](uint64_t userdata) {
+					editor->renderPath->setColorGradingTexture(wiResourceManager::Load(fileName));
+					if (editor->renderPath->getColorGradingTexture() != nullptr)
+					{
+						colorGradingButton.SetText(fileName);
+					}
+				});
+			});
 		}
 		else
 		{
-			wiRenderer::SetColorGrading(nullptr);
-			colorGradingButton->SetText("Load Color Grading LUT...");
+			editor->renderPath->setColorGradingTexture(nullptr);
+			colorGradingButton.SetText("Load Color Grading LUT...");
 		}
 
 	});
-	ppWindow->AddWidget(colorGradingButton);
+	AddWidget(&colorGradingButton);
 
-	stereogramCheckBox = new wiCheckBox("Stereogram: ");
-	stereogramCheckBox->SetTooltip("Compute a stereogram from the depth buffer. It produces a 3D silhouette image when viewed cross eyed.");
-	stereogramCheckBox->SetScriptTip("Renderable3DComponent::SetStereogramEnabled(bool value)");
-	stereogramCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	stereogramCheckBox->SetCheck(component->getStereogramEnabled());
-	stereogramCheckBox->OnClick([&](wiEventArgs args) {
-		component->setStereogramEnabled(args.bValue);
+	ditherCheckBox.Create("Dithering: ");
+	ditherCheckBox.SetTooltip("Toggle the full screen dithering effect. This helps to reduce color banding.");
+	ditherCheckBox.SetSize(XMFLOAT2(hei, hei));
+	ditherCheckBox.SetPos(XMFLOAT2(x, y += step));
+	ditherCheckBox.SetCheck(editor->renderPath->getDitherEnabled());
+	ditherCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setDitherEnabled(args.bValue);
+		});
+	AddWidget(&ditherCheckBox);
+
+	sharpenFilterCheckBox.Create("Sharpen Filter: ");
+	sharpenFilterCheckBox.SetTooltip("Toggle sharpening post process of the final image.");
+	sharpenFilterCheckBox.SetScriptTip("RenderPath3D::SetSharpenFilterEnabled(bool value)");
+	sharpenFilterCheckBox.SetSize(XMFLOAT2(hei, hei));
+	sharpenFilterCheckBox.SetPos(XMFLOAT2(x, y += step));
+	sharpenFilterCheckBox.SetCheck(editor->renderPath->getSharpenFilterEnabled());
+	sharpenFilterCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setSharpenFilterEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(stereogramCheckBox);
+	AddWidget(&sharpenFilterCheckBox);
 
-	sharpenFilterCheckBox = new wiCheckBox("Sharpen Filter: ");
-	sharpenFilterCheckBox->SetTooltip("Toggle sharpening post process of the final image.");
-	sharpenFilterCheckBox->SetScriptTip("Renderable3DComponent::SetSharpenFilterEnabled(bool value)");
-	sharpenFilterCheckBox->SetPos(XMFLOAT2(x, y += 35));
-	sharpenFilterCheckBox->SetCheck(component->getSharpenFilterEnabled());
-	sharpenFilterCheckBox->OnClick([&](wiEventArgs args) {
-		component->setSharpenFilterEnabled(args.bValue);
+	sharpenFilterAmountSlider.Create(0, 4, 1, 1000, "Amount: ");
+	sharpenFilterAmountSlider.SetTooltip("Set sharpness filter strength.");
+	sharpenFilterAmountSlider.SetScriptTip("RenderPath3D::SetSharpenFilterAmount(float value)");
+	sharpenFilterAmountSlider.SetSize(XMFLOAT2(100, hei));
+	sharpenFilterAmountSlider.SetPos(XMFLOAT2(x + 100, y));
+	sharpenFilterAmountSlider.SetValue(editor->renderPath->getSharpenFilterAmount());
+	sharpenFilterAmountSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setSharpenFilterAmount(args.fValue);
 	});
-	ppWindow->AddWidget(sharpenFilterCheckBox);
+	AddWidget(&sharpenFilterAmountSlider);
 
-	sharpenFilterAmountSlider = new wiSlider(0, 4, 1, 1000, "Amount: ");
-	sharpenFilterAmountSlider->SetTooltip("Set sharpness filter strength.");
-	sharpenFilterAmountSlider->SetScriptTip("Renderable3DComponent::SetSharpenFilterAmount(float value)");
-	sharpenFilterAmountSlider->SetSize(XMFLOAT2(100, 20));
-	sharpenFilterAmountSlider->SetPos(XMFLOAT2(x + 100, y));
-	sharpenFilterAmountSlider->SetValue(component->getSharpenFilterAmount());
-	sharpenFilterAmountSlider->OnSlide([&](wiEventArgs args) {
-		component->setSharpenFilterAmount(args.fValue);
+	outlineCheckBox.Create("Cartoon Outline: ");
+	outlineCheckBox.SetTooltip("Toggle the full screen cartoon outline effect.");
+	outlineCheckBox.SetSize(XMFLOAT2(hei, hei));
+	outlineCheckBox.SetPos(XMFLOAT2(x, y += step));
+	outlineCheckBox.SetCheck(editor->renderPath->getOutlineEnabled());
+	outlineCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setOutlineEnabled(args.bValue);
 	});
-	ppWindow->AddWidget(sharpenFilterAmountSlider);
+	AddWidget(&outlineCheckBox);
+
+	outlineThresholdSlider.Create(0, 1, 0.1f, 1000, "Threshold: ");
+	outlineThresholdSlider.SetTooltip("Outline edge detection threshold. Increase if not enough otlines are detected, decrease if too many outlines are detected.");
+	outlineThresholdSlider.SetSize(XMFLOAT2(100, hei));
+	outlineThresholdSlider.SetPos(XMFLOAT2(x + 100, y));
+	outlineThresholdSlider.SetValue(editor->renderPath->getOutlineThreshold());
+	outlineThresholdSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setOutlineThreshold(args.fValue);
+	});
+	AddWidget(&outlineThresholdSlider);
+
+	outlineThicknessSlider.Create(0, 4, 1, 1000, "Thickness: ");
+	outlineThicknessSlider.SetTooltip("Set outline thickness.");
+	outlineThicknessSlider.SetSize(XMFLOAT2(100, hei));
+	outlineThicknessSlider.SetPos(XMFLOAT2(x + 100, y += step));
+	outlineThicknessSlider.SetValue(editor->renderPath->getOutlineThickness());
+	outlineThicknessSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setOutlineThickness(args.fValue);
+	});
+	AddWidget(&outlineThicknessSlider);
+
+	chromaticaberrationCheckBox.Create("Chromatic Aberration: ");
+	chromaticaberrationCheckBox.SetTooltip("Toggle the full screen chromatic aberration effect. This simulates lens distortion at screen edges.");
+	chromaticaberrationCheckBox.SetSize(XMFLOAT2(hei, hei));
+	chromaticaberrationCheckBox.SetPos(XMFLOAT2(x, y += step));
+	chromaticaberrationCheckBox.SetCheck(editor->renderPath->getOutlineEnabled());
+	chromaticaberrationCheckBox.OnClick([=](wiEventArgs args) {
+		editor->renderPath->setChromaticAberrationEnabled(args.bValue);
+		});
+	AddWidget(&chromaticaberrationCheckBox);
+
+	chromaticaberrationSlider.Create(0, 4, 1.0f, 1000, "Amount: ");
+	chromaticaberrationSlider.SetTooltip("The lens distortion amount.");
+	chromaticaberrationSlider.SetSize(XMFLOAT2(100, hei));
+	chromaticaberrationSlider.SetPos(XMFLOAT2(x + 100, y));
+	chromaticaberrationSlider.SetValue(editor->renderPath->getChromaticAberrationAmount());
+	chromaticaberrationSlider.OnSlide([=](wiEventArgs args) {
+		editor->renderPath->setChromaticAberrationAmount(args.fValue);
+		});
+	AddWidget(&chromaticaberrationSlider);
 
 
-	ppWindow->Translate(XMFLOAT3(screenW - 380, 50, 0));
-	ppWindow->SetVisible(false);
+	Translate(XMFLOAT3((float)wiRenderer::GetDevice()->GetScreenWidth() - 500, 80, 0));
+	SetVisible(false);
 
-}
-
-
-PostprocessWindow::~PostprocessWindow()
-{
-	ppWindow->RemoveWidgets(true);
-	GUI->RemoveWidget(ppWindow);
-	SAFE_DELETE(ppWindow);
 }

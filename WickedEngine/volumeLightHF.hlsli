@@ -1,5 +1,5 @@
-#ifndef _VOLUMELIGHT_HF_
-#define _VOLUMELIGHT_HF_
+#ifndef WI_VOLUMELIGHT_HF
+#define WI_VOLUMELIGHT_HF
 #include "globals.hlsli"
 
 struct VertexToPixel{
@@ -7,11 +7,4 @@ struct VertexToPixel{
 	float4 col			: COLOR;
 };
 
-CBUFFER(VolumeLightCB, CBSLOT_RENDERER_VOLUMELIGHT)
-{
-	float4x4 lightWorld;
-	float4 lightColor;
-	float4 lightEnerdis;
-};
-
-#endif // _VOLUMELIGHT_HF_
+#endif // WI_VOLUMELIGHT_HF

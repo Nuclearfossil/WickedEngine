@@ -8,79 +8,64 @@
 
 #include "CommonInclude.h"
 
+// High-level interface:
+#include "RenderPath.h"
+#include "RenderPath2D.h"
+#include "RenderPath3D.h"
+#include "RenderPath3D_PathTracing.h"
+#include "LoadingScreen.h"
+#include "MainComponent.h"
+
+// Engine-level systems
 #include "wiVersion.h"
-#include "wiRenderTarget.h"
-#include "wiDepthTarget.h"
+#include "wiPlatform.h"
 #include "wiBackLog.h"
-#include "wiFrustum.h"
-#include "wiImageEffects.h"
+#include "wiIntersect.h"
 #include "wiImage.h"
-#include "wiSprite.h"
 #include "wiFont.h"
-#include "wiFrameRate.h"
-#include "wiCpuInfo.h"
-#include "wiLoader.h"
+#include "wiSprite.h"
+#include "wiSpriteFont.h"
+#include "wiScene.h"
 #include "wiEmittedParticle.h"
 #include "wiHairParticle.h"
 #include "wiRenderer.h"
-#include "wiDirectInput.h"
-#include "wiXInput.h"
-#include "wiRawInput.h"
-#include "wiTaskThread.h"
 #include "wiMath.h"
-#include "wiLensFlare.h"
-#include "wiSound.h"
-#include "wiThreadSafeManager.h"
+#include "wiAudio.h"
 #include "wiResourceManager.h"
 #include "wiTimer.h"
 #include "wiHelper.h"
-#include "wiInputManager.h"
-#include "wiCVars.h"
+#include "wiInput.h"
+#include "wiRawInput.h"
+#include "wiXInput.h"
 #include "wiTextureHelper.h"
 #include "wiRandom.h"
 #include "wiColor.h"
-#include "wiWaterPlane.h"
-#include "wiPHYSICS.h"
-#include "wiBULLET.h"
+#include "wiPhysicsEngine.h"
 #include "wiEnums.h"
 #include "wiInitializer.h"
 #include "wiLua.h"
 #include "wiLuna.h"
-#include "wiGraphicsAPI.h"
+#include "wiGraphicsDevice.h"
 #include "wiGUI.h"
 #include "wiWidget.h"
-#include "wiHashString.h"
-#include "wiWindowRegistration.h"
-#include "wiTranslator.h"
 #include "wiArchive.h"
 #include "wiSpinLock.h"
 #include "wiRectPacker.h"
 #include "wiProfiler.h"
 #include "wiOcean.h"
 #include "wiStartupArguments.h"
-
-#include "RenderableComponent.h"
-#include "Renderable2DComponent.h"
-#include "Renderable3DComponent.h"
-#include "ForwardRenderableComponent.h"
-#include "DeferredRenderableComponent.h"
-#include "TiledForwardRenderableComponent.h"
-#include "TiledDeferredRenderableComponent.h"
-#include "LoadingScreenComponent.h"
-#include "MainComponent.h"
-
-#include "wiGraphicsDevice_DX11.h"
-#include "wiGraphicsDevice_DX12.h"
-#include "wiGraphicsDevice_Vulkan.h"
+#include "wiGPUBVH.h"
+#include "wiGPUSortLib.h"
+#include "wiJobSystem.h"
+#include "wiNetwork.h"
+#include "wiEvent.h"
 
 #ifdef _WIN32
-
-#ifdef WINSTORE_SUPPORT
+#ifdef PLATFORM_UWP
 #pragma comment(lib,"WickedEngine_UWP.lib")
 #else
 #pragma comment(lib,"WickedEngine_Windows.lib")
-#endif // WINSTORE_SUPPORT
-
+#endif // PLATFORM_UWP
 #endif // _WIN32
 
 

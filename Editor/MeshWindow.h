@@ -1,38 +1,38 @@
 #pragma once
+#include "WickedEngine.h"
 
-struct Material;
-class wiGUI;
-class wiWindow;
-class wiLabel;
-class wiCheckBox;
-class wiSlider;
-class wiButton;
+class EditorComponent;
 
-struct Mesh;
-
-class MeshWindow
+class MeshWindow : public wiWindow
 {
 public:
-	MeshWindow(wiGUI* gui);
-	~MeshWindow();
+	void Create(EditorComponent* editor);
 
-	wiGUI* GUI;
+	wiECS::Entity entity;
+	void SetEntity(wiECS::Entity entity);
 
-	void SetMesh(Mesh* mesh);
+	wiLabel meshInfoLabel;
+	wiCheckBox doubleSidedCheckBox;
+	wiCheckBox softbodyCheckBox;
+	wiSlider massSlider;
+	wiSlider frictionSlider;
+	wiButton impostorCreateButton;
+	wiSlider impostorDistanceSlider;
+	wiSlider tessellationFactorSlider;
+	wiButton flipCullingButton;
+	wiButton flipNormalsButton;
+	wiButton computeNormalsSmoothButton;
+	wiButton computeNormalsHardButton;
+	wiButton recenterButton;
+	wiButton recenterToBottomButton;
 
-	Mesh* mesh;
+	wiCheckBox terrainCheckBox;
+	wiComboBox terrainMat1Combo;
+	wiComboBox terrainMat2Combo;
+	wiComboBox terrainMat3Combo;
+	wiButton terrainGenButton;
 
-	wiWindow*	meshWindow;
-	wiLabel*	meshInfoLabel;
-	wiCheckBox* doubleSidedCheckBox;
-	wiSlider*	massSlider;
-	wiSlider*	frictionSlider;
-	wiButton*	impostorCreateButton;
-	wiSlider*	impostorDistanceSlider;
-	wiSlider*	tessellationFactorSlider;
-	wiButton*	flipCullingButton;
-	wiButton*	flipNormalsButton;
-	wiButton*	computeNormalsSmoothButton;
-	wiButton*	computeNormalsHardButton;
+	wiComboBox morphTargetCombo;
+	wiSlider morphTargetSlider;
 };
 

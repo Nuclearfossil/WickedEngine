@@ -1,55 +1,33 @@
 #pragma once
+#include "wiGraphicsDevice.h"
+
 #include <string>
-#include <unordered_map>
-#include <stack>
 
-#include "wiEnums.h"
-#include "wiTimer.h"
-#include "wiGraphicsResource.h"
-
-class wiProfiler
+namespace wiProfiler
 {
-public:
-	static wiProfiler& GetInstance() { static wiProfiler profiler; return profiler; }
+	typedef size_t range_id;
 
-	enum PROFILER_DOMAIN
-	{
-		DOMAIN_CPU,
-		DOMAIN_GPU,
-		DOMAIN_COUNT
-	};
-	struct Range
-	{
-		PROFILER_DOMAIN domain;
-		std::string name;
-		float time;
-
-		wiTimer cpuBegin, cpuEnd;
-		wiGraphicsTypes::GPUQuery gpuBegin, gpuEnd;
-
-		Range() :time(0), domain(DOMAIN_CPU) {}
-		~Range() {}
-	};
-
+	// Begin collecting profiling data for the current frame
 	void BeginFrame();
-	void EndFrame();
-	void BeginRange(const std::string& name, PROFILER_DOMAIN domain, GRAPHICSTHREAD threadID = GRAPHICSTHREAD_IMMEDIATE);
-	void EndRange(GRAPHICSTHREAD threadID = GRAPHICSTHREAD_IMMEDIATE);
 
-	float GetRangeTime(const std::string& name) { return ranges[name]->time; }
-	const std::unordered_map<std::string, Range*>& GetRanges() { return ranges; }
+	// Finalize collecting profiling data for the current frame
+	void EndFrame(wiGraphics::CommandList cmd);
+
+	// Start a CPU profiling range
+	range_id BeginRangeCPU(const char* name);
+
+	// Start a GPU profiling range
+	range_id BeginRangeGPU(const char* name, wiGraphics::CommandList cmd);
+
+	// End a profiling range
+	void EndRange(range_id id);
 
 	// Renders a basic text of the Profiling results to the (x,y) screen coordinate
-	void DrawData(int x, int y, GRAPHICSTHREAD threadID);
+	void DrawData(float x, float y, wiGraphics::CommandList cmd);
 
-	bool ENABLED;
+	// Enable/disable profiling
+	void SetEnabled(bool value);
 
-private:
-	wiProfiler();
-	~wiProfiler();
-
-	std::unordered_map<std::string, Range*> ranges;
-	std::stack<std::string> rangeStack;
-	wiGraphicsTypes::GPUQuery disjoint;
+	bool IsEnabled();
 };
 

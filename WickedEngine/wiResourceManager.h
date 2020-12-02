@@ -1,61 +1,39 @@
 #pragma once
 #include "CommonInclude.h"
-#include "wiThreadSafeManager.h"
-#include "wiGraphicsAPI.h"
-#include "wiHashString.h"
+#include "wiGraphicsDevice.h"
+#include "wiAudio.h"
 
-#include <map>
+#include <memory>
+#include <mutex>
 #include <unordered_map>
 
-class wiSound;
-
-class wiResourceManager : public wiThreadSafeManager
+struct wiResource
 {
-public:
-	enum Data_Type{
-		DYNAMIC,
-		IMAGE,
-		SOUND,MUSIC,
-		VERTEXSHADER,
-		PIXELSHADER,
-		GEOMETRYSHADER,
-		HULLSHADER,
-		DOMAINSHADER,
-		COMPUTESHADER,
-	};
-
-	struct Resource
+	union
 	{
-		void* data;
-		Data_Type type;
-		long refCount;
-
-		Resource(void* newData, Data_Type newType) :data(newData), type(newType)
-		{
-			refCount = 1;
-		};
+		const void* data = nullptr;
+		const wiGraphics::Texture* texture;
+		const wiAudio::Sound* sound;
 	};
-	typedef std::unordered_map<wiHashString, Resource*> container;
-	container resources;
 
-protected:
-typedef std::map<std::string,Data_Type> filetypes;
-static filetypes types;
-static wiResourceManager* globalResources;
-static void SetUp();
+	enum DATA_TYPE
+	{
+		EMPTY,
+		IMAGE,
+		SOUND,
+	} type = EMPTY;
 
-
-public:
-	wiResourceManager();
-	~wiResourceManager();
-	static wiResourceManager* GetGlobal();
-	static wiResourceManager* GetShaderManager();
-
-	const Resource* get(const wiHashString& name, bool IncRefCount = false);
-	//specify datatype for shaders
-	void* add(const wiHashString& name, Data_Type newType = Data_Type::DYNAMIC
-		, wiGraphicsTypes::VertexLayoutDesc* vertexLayoutDesc = nullptr, UINT elementCount = 0);
-	bool del(const wiHashString& name, bool forceDelete = false);
-	bool CleanUp();
+	~wiResource();
 };
 
+namespace wiResourceManager
+{
+	// Load a resource
+	std::shared_ptr<wiResource> Load(const std::string& name);
+	// Check if a resource is currently loaded
+	bool Contains(const std::string& name);
+	// Register a pre-created resource
+	std::shared_ptr<wiResource> Register(const std::string& name, void* data, wiResource::DATA_TYPE data_type);
+	// Invalidate all resources
+	void Clear();
+};

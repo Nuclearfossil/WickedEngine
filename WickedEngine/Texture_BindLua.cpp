@@ -1,6 +1,6 @@
 #include "Texture_BindLua.h"
 
-using namespace wiGraphicsTypes;
+using namespace wiGraphics;
 
 const char Texture_BindLua::className[] = "Texture";
 
@@ -11,14 +11,10 @@ Luna<Texture_BindLua>::PropertyType Texture_BindLua::properties[] = {
 	{ NULL, NULL }
 };
 
-Texture_BindLua::Texture_BindLua(Texture2D* texture) :texture(texture)
+Texture_BindLua::Texture_BindLua(Texture texture) :texture(texture)
 {
 }
 Texture_BindLua::Texture_BindLua(lua_State *L)
-{
-	texture = nullptr;
-}
-Texture_BindLua::~Texture_BindLua()
 {
 }
 
@@ -27,7 +23,7 @@ void Texture_BindLua::Bind()
 	static bool initialized = false;
 	if (!initialized)
 	{
-		Luna<Texture_BindLua>::Register(wiLua::GetGlobal()->GetLuaState());
+		Luna<Texture_BindLua>::Register(wiLua::GetLuaState());
 		initialized = true;
 	}
 }

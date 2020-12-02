@@ -1,43 +1,34 @@
 #pragma once
+#include "WickedEngine.h"
 
-struct Material;
-class wiGUI;
-class wiWindow;
-class wiLabel;
-class wiCheckBox;
-class wiSlider;
-class wiButton;
-class wiColorPicker;
-class wiComboBox;
+class EditorComponent;
 
-struct Light;
-
-class LightWindow
+class LightWindow : public wiWindow
 {
 public:
-	LightWindow(wiGUI* gui);
-	~LightWindow();
+	void Create(EditorComponent* editor);
 
-	wiGUI* GUI;
+	wiECS::Entity entity;
+	void SetEntity(wiECS::Entity entity);
 
-	void SetLight(Light* light);
-	void SetLightType(Light::LightType type);
+	void SetLightType(wiScene::LightComponent::LightType type);
 
-	Light* light;
+	wiSlider energySlider;
+	wiSlider rangeSlider;
+	wiSlider radiusSlider;
+	wiSlider widthSlider;
+	wiSlider heightSlider;
+	wiSlider fovSlider;
+	wiSlider biasSlider;
+	wiCheckBox	shadowCheckBox;
+	wiCheckBox	haloCheckBox;
+	wiCheckBox	volumetricsCheckBox;
+	wiCheckBox	staticCheckBox;
+	wiButton addLightButton;
+	wiColorPicker colorPicker;
+	wiComboBox typeSelectorComboBox;
 
-	wiWindow*	lightWindow;
-	wiSlider*	energySlider;
-	wiSlider*	distanceSlider;
-	wiSlider*	radiusSlider;
-	wiSlider*	widthSlider;
-	wiSlider*	heightSlider;
-	wiSlider*	fovSlider;
-	wiSlider*	biasSlider;
-	wiCheckBox*	shadowCheckBox;
-	wiCheckBox*	haloCheckBox;
-	wiCheckBox*	volumetricsCheckBox;
-	wiButton*	addLightButton;
-	wiColorPicker*	colorPicker;
-	wiComboBox*	typeSelectorComboBox;
+	wiLabel lensflare_Label;
+	wiButton lensflare_Button[7];
 };
 

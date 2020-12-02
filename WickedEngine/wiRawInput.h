@@ -1,29 +1,31 @@
 #pragma once
 #include "CommonInclude.h"
+#include "wiInput.h"
 
-class wiRawInput
+namespace wiRawInput
 {
-public:
-#ifndef WINSTORE_SUPPORT
-	wiRawInput(HWND hWnd = NULL);
-	~wiRawInput();
+	// Call this once to register raw input devices
+	void Initialize();
 
-	//for generic joypad support
-	bool RegisterJoys(HWND hWnd);
-	//disables legacy mouse and keyboard support
-	bool RegisterKeyboardMouse(HWND hWnd);
-	//use this in WndProc in case of WM_INPUT event
-	void RetrieveData(LPARAM lParam);
-	//read buffered data
-	void RetrieveBufferedData();
+	// Updates the state of raw input devices, call once per frame
+	void Update();
 
-	RAWINPUT raw;
+	// Parse Windows message from message loop. Not necessary to call if you don't use message loop in the application. 
+	void ParseMessage(void* lparam);
 
-#else
-	//Raw input is not available!
-	wiRawInput(){}
-	//Raw input is not available!
-	void RetrieveBufferedData(){}
-#endif //WINSTORE_SUPPORT
-};
+	// Writes the keyboard state into state parameter
+	void GetKeyboardState(wiInput::KeyboardState* state);
 
+	// Writes the mouse state into state parameter
+	void GetMouseState(wiInput::MouseState* state);
+
+	// Returns how many controller devices have received input ever. This doesn't correlate with which ones are currently available
+	int GetMaxControllerCount();
+
+	// Returns whether the controller identified by index parameter is available or not
+	//	Id state parameter is not nullptr, and the controller is available, the state will be written into it
+	bool GetControllerState(wiInput::ControllerState* state, int index);
+
+	// Sends feedback data for the controller identified by index parameter to output
+	void SetControllerFeedback(const wiInput::ControllerFeedback& data, int index);
+}

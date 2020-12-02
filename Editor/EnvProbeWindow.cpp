@@ -1,97 +1,93 @@
 #include "stdafx.h"
 #include "EnvProbeWindow.h"
+#include "Editor.h"
 
-EnvProbeWindow::EnvProbeWindow(wiGUI* gui) : GUI(gui)
+using namespace wiECS;
+using namespace wiScene;
+
+void EnvProbeWindow::Create(EditorComponent* editor)
 {
-	probe = nullptr;
+	wiWindow::Create("Environment Probe Window");
+	SetSize(XMFLOAT2(300, 200));
 
-	assert(GUI && "Invalid GUI!");
+	float x = 100, y = 5, step = 35;
 
-	float screenW = (float)wiRenderer::GetDevice()->GetScreenWidth();
-	float screenH = (float)wiRenderer::GetDevice()->GetScreenHeight();
-
-	envProbeWindow = new wiWindow(GUI, "Environment Probe Window");
-	envProbeWindow->SetSize(XMFLOAT2(600, 400));
-	envProbeWindow->SetEnabled(true);
-	GUI->AddWidget(envProbeWindow);
-
-	float x = 250, y = 0, step = 45;
-
-	realTimeCheckBox = new wiCheckBox("RealTime: ");
-	realTimeCheckBox->SetPos(XMFLOAT2(x, y += step));
-	realTimeCheckBox->SetEnabled(false);
-	realTimeCheckBox->OnClick([&](wiEventArgs args) {
+	realTimeCheckBox.Create("RealTime: ");
+	realTimeCheckBox.SetPos(XMFLOAT2(x, y += step));
+	realTimeCheckBox.SetEnabled(false);
+	realTimeCheckBox.OnClick([&](wiEventArgs args) {
+		EnvironmentProbeComponent* probe = wiScene::GetScene().probes.GetComponent(entity);
 		if (probe != nullptr)
 		{
-			probe->realTime = args.bValue;
-			probe->isUpToDate = false;
+			probe->SetRealTime(args.bValue);
+			probe->SetDirty();
 		}
 	});
-	envProbeWindow->AddWidget(realTimeCheckBox);
+	AddWidget(&realTimeCheckBox);
 
-	generateButton = new wiButton("Put");
-	generateButton->SetPos(XMFLOAT2(x, y += step));
-	generateButton->OnClick([](wiEventArgs args) {
+	generateButton.Create("Put");
+	generateButton.SetPos(XMFLOAT2(x, y += step));
+	generateButton.OnClick([=](wiEventArgs args) {
 		XMFLOAT3 pos;
-		XMStoreFloat3(&pos, XMVectorAdd(wiRenderer::getCamera()->GetEye(), wiRenderer::getCamera()->GetAt() * 4));
-		wiRenderer::PutEnvProbe(pos);
+		XMStoreFloat3(&pos, XMVectorAdd(wiRenderer::GetCamera().GetEye(), wiRenderer::GetCamera().GetAt() * 4));
+		Entity entity = wiScene::GetScene().Entity_CreateEnvironmentProbe("editorProbe", pos);
+		editor->ClearSelected();
+		editor->AddSelected(entity);
+		editor->RefreshSceneGraphView();
+		SetEntity(entity);
 	});
-	envProbeWindow->AddWidget(generateButton);
+	AddWidget(&generateButton);
 
-	refreshButton = new wiButton("Refresh");
-	refreshButton->SetPos(XMFLOAT2(x, y += step));
-	refreshButton->SetEnabled(false);
-	refreshButton->OnClick([&](wiEventArgs args) {
+	refreshButton.Create("Refresh");
+	refreshButton.SetPos(XMFLOAT2(x, y += step));
+	refreshButton.SetEnabled(false);
+	refreshButton.OnClick([&](wiEventArgs args) {
+		EnvironmentProbeComponent* probe = wiScene::GetScene().probes.GetComponent(entity);
 		if (probe != nullptr)
 		{
-			probe->isUpToDate = false;
+			probe->SetDirty();
 		}
 	});
-	envProbeWindow->AddWidget(refreshButton);
+	AddWidget(&refreshButton);
 
-	refreshAllButton = new wiButton("Refresh All");
-	refreshAllButton->SetPos(XMFLOAT2(x, y += step));
-	refreshAllButton->SetEnabled(true);
-	refreshAllButton->OnClick([&](wiEventArgs args) {
-		const Scene& scene = wiRenderer::GetScene();
-		for (Model* x : scene.models)
+	refreshAllButton.Create("Refresh All");
+	refreshAllButton.SetPos(XMFLOAT2(x, y += step));
+	refreshAllButton.SetEnabled(true);
+	refreshAllButton.OnClick([&](wiEventArgs args) {
+		Scene& scene = wiScene::GetScene();
+		for (size_t i = 0; i < scene.probes.GetCount(); ++i)
 		{
-			for (EnvironmentProbe* probe : x->environmentProbes)
-			{
-				probe->isUpToDate = false;
-			}
+			EnvironmentProbeComponent& probe = scene.probes[i];
+			probe.SetDirty();
 		}
 	});
-	envProbeWindow->AddWidget(refreshAllButton);
+	AddWidget(&refreshAllButton);
 
 
 
 
-	envProbeWindow->Translate(XMFLOAT3(30, 30, 0));
-	envProbeWindow->SetVisible(false);
+	Translate(XMFLOAT3(100, 100, 0));
+	SetVisible(false);
+
+	SetEntity(INVALID_ENTITY);
 }
 
-
-EnvProbeWindow::~EnvProbeWindow()
+void EnvProbeWindow::SetEntity(Entity entity)
 {
-	envProbeWindow->RemoveWidgets(true);
-	GUI->RemoveWidget(envProbeWindow);
-	SAFE_DELETE(envProbeWindow);
-}
+	this->entity = entity;
 
-void EnvProbeWindow::SetProbe(EnvironmentProbe* value)
-{
-	probe = value;
+	const EnvironmentProbeComponent* probe = wiScene::GetScene().probes.GetComponent(entity);
+
 	if (probe == nullptr)
 	{
-		realTimeCheckBox->SetEnabled(false);
-		refreshButton->SetEnabled(false);
+		realTimeCheckBox.SetEnabled(false);
+		refreshButton.SetEnabled(false);
 	}
 	else
 	{
-		realTimeCheckBox->SetCheck(probe->realTime);
-		realTimeCheckBox->SetEnabled(true);
-		refreshButton->SetEnabled(true);
+		realTimeCheckBox.SetCheck(probe->IsRealTime());
+		realTimeCheckBox.SetEnabled(true);
+		refreshButton.SetEnabled(true);
 	}
 }
 

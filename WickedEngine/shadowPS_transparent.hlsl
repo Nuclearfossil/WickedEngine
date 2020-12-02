@@ -4,35 +4,35 @@
 struct VertextoPixel
 {
 	float4 pos				: SV_POSITION;
-	float2 tex				: TEXCOORD0;
-	nointerpolation float  dither : DITHER;
-	nointerpolation float3 instanceColor	: INSTANCECOLOR;
+	float4 color			: COLOR;
+	float4 uvsets			: UVSETS;
 };
 
 float4 main(VertextoPixel input) : SV_TARGET
 {
 	float2 pixel = input.pos.xy;
 
-	clip(dither(pixel) - input.dither);
+	float4 color;
+	[branch]
+	if (g_xMaterial.uvset_baseColorMap >= 0)
+	{
+		const float2 UV_baseColorMap = g_xMaterial.uvset_baseColorMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+		color = texture_basecolormap.Sample(sampler_objectshader, UV_baseColorMap);
+		color.rgb = DEGAMMA(color.rgb);
+	}
+	else
+	{
+		color = 1;
+	}
+	color *= input.color;
 
-	float2 UV = input.tex * g_xMat_texMulAdd.xy + g_xMat_texMulAdd.zw;
+#ifndef DISABLE_ALPHATEST
+	clip(color.a - g_xMaterial.alphaTest);
+#endif // DISABLE_ALPHATEST
 
-	float4 color = g_xMat_baseColor * float4(input.instanceColor, 1) * xBaseColorMap.Sample(sampler_objectshader, UV);
-	color.rgb = DEGAMMA(color.rgb);
-	ALPHATEST(color.a);
 	float opacity = color.a;
 
-	color.rgb *= 1 - opacity;
-
-	// Use the alpha channel for refraction caustics effect:
-	float3 bumpColor;
-	
-	bumpColor = float3(2.0f * xNormalMap.Sample(sampler_objectshader, UV - g_xMat_texMulAdd.ww).rg - 1.0f, 1);
-	bumpColor.rg *= g_xMat_refractionIndex;
-	bumpColor.rg *= g_xMat_normalMapStrength;
-	bumpColor = normalize(max(bumpColor, float3(0, 0, 0.0001f)));
-	
-	color.a = 1 - saturate(dot(bumpColor, float3(0, 0, 1)));
+	color.rgb *= 1 - opacity; // if fully opaque, then black (not let through any light)
 
 	return color;
 }

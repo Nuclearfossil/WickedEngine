@@ -1,38 +1,23 @@
 #pragma once
+#include "WickedEngine.h"
 
-struct Armature;
-class wiGUI;
-class wiWindow;
-class wiLabel;
-class wiCheckBox;
-class wiSlider;
-class wiComboBox;
+class EditorComponent;
 
-class AnimationWindow
+class AnimationWindow : public wiWindow
 {
 public:
-	AnimationWindow(wiGUI* gui);
-	~AnimationWindow();
+	void Create(EditorComponent* editor);
+	
+	wiECS::Entity entity = wiECS::INVALID_ENTITY;
 
-	wiGUI* GUI;
-	Armature* armature;
-	void SetArmature(Armature* armature);
+	wiComboBox	animationsComboBox;
+	wiCheckBox loopedCheckBox;
+	wiButton	playButton;
+	wiButton	stopButton;
+	wiSlider	timerSlider;
+	wiSlider	amountSlider;
+	wiSlider	speedSlider;
 
-	wiWindow*	animWindow;
-	wiComboBox*	actionsComboBox;
-	wiSlider*	blendSlider;
-	wiCheckBox* loopedCheckBox;
-
-	// TODO: nicer way to control arbitrary amount of animation layers....
-
-	wiComboBox*	actionsComboBox1;
-	wiSlider*	blendSlider1;
-	wiSlider*	weightSlider1;
-	wiCheckBox* loopedCheckBox1;
-
-	wiComboBox*	actionsComboBox2;
-	wiSlider*	blendSlider2;
-	wiSlider*	weightSlider2;
-	wiCheckBox* loopedCheckBox2;
+	void Update();
 };
 

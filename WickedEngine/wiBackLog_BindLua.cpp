@@ -1,5 +1,8 @@
 #include "wiBackLog_BindLua.h"
 #include "wiBackLog.h"
+#include "wiLua.h"
+
+#include <sstream>
 
 using namespace std;
 
@@ -32,7 +35,7 @@ namespace wiBackLog_BindLua
 
 		if (argc > 0)
 		{
-			wiBackLog::font.props.size = wiLua::SGetInt(L, 1);
+			wiBackLog::setFontSize(wiLua::SGetInt(L, 1));
 		}
 		else
 			wiLua::SError(L, "backlog_fontsize(int val) not enough arguments!");
@@ -49,7 +52,7 @@ namespace wiBackLog_BindLua
 		int argc = wiLua::SGetArgCount(L);
 		if (argc > 0)
 		{
-			wiBackLog::font.props.spacingY = wiLua::SGetInt(L, 1);
+			wiBackLog::setFontRowspacing(wiLua::SGetFloat(L, 1));
 		}
 		else
 			wiLua::SError(L, "backlog_fontrowspacing(int val) not enough arguments!");
@@ -62,11 +65,11 @@ namespace wiBackLog_BindLua
 		if (!initialized)
 		{
 			initialized = true;
-			wiLua::GetGlobal()->RegisterFunc("backlog_clear", backlog_clear);
-			wiLua::GetGlobal()->RegisterFunc("backlog_post", backlog_post);
-			wiLua::GetGlobal()->RegisterFunc("backlog_fontsize", backlog_fontsize);
-			wiLua::GetGlobal()->RegisterFunc("backlog_isactive", backlog_isactive);
-			wiLua::GetGlobal()->RegisterFunc("backlog_fontrowspacing", backlog_fontrowspacing);
+			wiLua::RegisterFunc("backlog_clear", backlog_clear);
+			wiLua::RegisterFunc("backlog_post", backlog_post);
+			wiLua::RegisterFunc("backlog_fontsize", backlog_fontsize);
+			wiLua::RegisterFunc("backlog_isactive", backlog_isactive);
+			wiLua::RegisterFunc("backlog_fontrowspacing", backlog_fontrowspacing);
 		}
 	}
 }

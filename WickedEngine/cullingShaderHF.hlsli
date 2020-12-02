@@ -1,5 +1,5 @@
-#ifndef _CULLING_SHADER_HF_
-#define _CULLING_SHADER_HF_
+#ifndef WI_CULLING_SHADER_HF
+#define WI_CULLING_SHADER_HF
 #include "ShaderInterop.h"
 
 struct Plane
@@ -26,10 +26,10 @@ Plane ComputePlane(float3 p0, float3 p1, float3 p2)
 }
 // Four planes of a view frustum (in view space).
 // The planes are:
-//  * Left,
-//  * Right,
-//  * Top,
-//  * Bottom.
+// * Left,
+// * Right,
+// * Top,
+// * Bottom.
 // The back and/or front planes can be computed from depth values in the 
 // light culling compute shader.
 struct Frustum
@@ -40,7 +40,7 @@ struct Frustum
 float4 ClipToView(float4 clip)
 {
 	// View space position.
-	float4 view = mul(clip, g_xFrame_MainCamera_InvP);
+	float4 view = mul(g_xCamera_InvP, clip);
 	// Perspective projection.
 	view = view / view.w;
 
@@ -50,7 +50,7 @@ float4 ClipToView(float4 clip)
 float4 ScreenToView(float4 screen)
 {
 	// Convert to normalized texture coordinates
-	float2 texCoord = screen.xy * g_xWorld_InternalResolution_Inverse;
+	float2 texCoord = screen.xy * g_xFrame_InternalResolution_rcp;
 
 	// Convert to clip space
 	float4 clip = float4(float2(texCoord.x, 1.0f - texCoord.y) * 2.0f - 1.0f, screen.z, screen.w);
@@ -218,7 +218,7 @@ void AABBtransform(inout AABB aabb, float4x4 mat)
 	[unroll]
 	for (uint i = 0; i < 8; ++i)
 	{
-		corners[i] = mul(float4(corners[i], 1), mat).xyz;
+		corners[i] = mul(mat, float4(corners[i], 1)).xyz;
 		_min = min(_min, corners[i]);
 		_max = max(_max, corners[i]);
 	}
@@ -226,4 +226,4 @@ void AABBtransform(inout AABB aabb, float4x4 mat)
 	AABBfromMinMax(aabb, _min, _max);
 }
 
-#endif // _CULLING_SHADER_HF_
+#endif // WI_CULLING_SHADER_HF

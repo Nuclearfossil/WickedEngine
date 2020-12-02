@@ -1,32 +1,19 @@
 #pragma once
+#include "WickedEngine.h"
 
-struct ForceField;
+class EditorComponent;
 
-class wiGUI;
-class wiWindow;
-class wiLabel;
-class wiCheckBox;
-class wiSlider;
-class wiComboBox;
-class wiColorPicker;
-
-class ForceFieldWindow
+class ForceFieldWindow : public wiWindow
 {
 public:
-	ForceFieldWindow(wiGUI* gui);
-	~ForceFieldWindow();
+	void Create(EditorComponent* editor);
 
-	void SetForceField(ForceField* force);
+	wiECS::Entity entity;
+	void SetEntity(wiECS::Entity entity);
 
-	ForceField* force;
-
-	wiGUI* GUI;
-
-	wiWindow*	forceFieldWindow;
-
-	wiComboBox* typeComboBox;
-	wiSlider* gravitySlider;
-	wiSlider* rangeSlider;
-	wiButton* addButton;
+	wiComboBox typeComboBox;
+	wiSlider gravitySlider;
+	wiSlider rangeSlider;
+	wiButton addButton;
 };
 

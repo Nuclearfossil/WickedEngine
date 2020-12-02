@@ -2,33 +2,13 @@
 #include "globals.hlsli"
 #include "skyHF.hlsli"
 
-struct VSOut {
-	float4 pos : SV_POSITION;
-	float3 nor : TEXCOORD0;
-	float4 pos2D : SCREENPOSITION;
-	float4 pos2DPrev : SCREENPOSITIONPREV;
-};
+float4 main(float4 pos : SV_POSITION, float2 clipspace : TEXCOORD) : SV_TARGET
+{
+	float4 unprojected = mul(g_xCamera_InvVP, float4(clipspace, 0.0f, 1.0f));
+	unprojected.xyz /= unprojected.w;
 
-float4 main(VSOut PSIn) : SV_TARGET
-{ 
-	float3 normal = normalize(PSIn.nor);
+	const float3 origin = g_xCamera_CamPos;
+	const float3 direction = normalize(unprojected.xyz - origin);
 
-
-#ifdef SHADERCOMPILER_SPIRV
-	//compiler bug workaround:
-	uint ucol = EntityArray[g_xFrame_SunEntityArrayIndex].color;
-	float3 sunc;
-
-	sunc.x = (float)((ucol >> 0) & 0x000000FF) / 255.0f;
-	sunc.y = (float)((ucol >> 8) & 0x000000FF) / 255.0f;
-	sunc.z = (float)((ucol >> 16) & 0x000000FF) / 255.0f;
-#else
-	float3 sunc = GetSunColor();
-#endif
-
-	float4 color = float4(normal.y > 0 ? max(pow(saturate(dot(GetSunDirection().xyz, normal) + 0.0001), 64)*sunc, 0) : 0, 1);
-
-	AddCloudLayer(color, normal, true);
-
-	return color;
+	return float4(GetDynamicSkyColor(direction, true, true, true), 1);
 }

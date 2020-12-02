@@ -2,207 +2,213 @@
 #include "wiRenderer.h"
 #include "wiResourceManager.h"
 #include "ShaderInterop_GPUSortLib.h"
+#include "wiEvent.h"
 
-using namespace wiGraphicsTypes;
+using namespace wiGraphics;
 
-GPUBuffer* wiGPUSortLib::indirectBuffer = nullptr;
-GPUBuffer* wiGPUSortLib::sortCB = nullptr;
-ComputeShader* wiGPUSortLib::kickoffSortCS = nullptr;
-ComputeShader* wiGPUSortLib::sortCS = nullptr;
-ComputeShader* wiGPUSortLib::sortInnerCS = nullptr;
-ComputeShader* wiGPUSortLib::sortStepCS = nullptr;
-ComputePSO wiGPUSortLib::CPSO_kickoffSort;
-ComputePSO wiGPUSortLib::CPSO_sort;
-ComputePSO wiGPUSortLib::CPSO_sortInner;
-ComputePSO wiGPUSortLib::CPSO_sortStep;
-
-void wiGPUSortLib::Initialize()
+namespace wiGPUSortLib
 {
-	GPUBufferDesc bd;
-
-	bd.Usage = USAGE_DYNAMIC;
-	bd.CPUAccessFlags = CPU_ACCESS_WRITE;
-	bd.BindFlags = BIND_CONSTANT_BUFFER;
-	bd.MiscFlags = 0;
-	bd.ByteWidth = sizeof(SortConstants);
-	sortCB = new GPUBuffer;
-	wiRenderer::GetDevice()->CreateBuffer(&bd, nullptr, sortCB);
+	static GPUBuffer indirectBuffer;
+	static GPUBuffer sortCB;
+	static Shader kickoffSortCS;
+	static Shader sortCS;
+	static Shader sortInnerCS;
+	static Shader sortStepCS;
 
 
-	bd.Usage = USAGE_DEFAULT;
-	bd.CPUAccessFlags = 0;
-	bd.BindFlags = BIND_UNORDERED_ACCESS;
-	bd.MiscFlags = RESOURCE_MISC_DRAWINDIRECT_ARGS | RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-	bd.ByteWidth = sizeof(IndirectDispatchArgs);
-	indirectBuffer = new GPUBuffer;
-	wiRenderer::GetDevice()->CreateBuffer(&bd, nullptr, indirectBuffer);
-
-}
-
-void wiGPUSortLib::LoadShaders()
-{
-	GraphicsDevice* device = wiRenderer::GetDevice();
-
-	kickoffSortCS = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "gpusortlib_kickoffSortCS.cso", wiResourceManager::COMPUTESHADER));
-	sortCS = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "gpusortlib_sortCS.cso", wiResourceManager::COMPUTESHADER));
-	sortInnerCS = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "gpusortlib_sortInnerCS.cso", wiResourceManager::COMPUTESHADER));
-	sortStepCS = static_cast<ComputeShader*>(wiResourceManager::GetShaderManager()->add(wiRenderer::SHADERPATH + "gpusortlib_sortStepCS.cso", wiResourceManager::COMPUTESHADER));
-
-
-
-	ComputePSODesc desc;
-
-	desc.cs = kickoffSortCS;
-	device->CreateComputePSO(&desc, &CPSO_kickoffSort);
-
-	desc.cs = sortCS;
-	device->CreateComputePSO(&desc, &CPSO_sort);
-
-	desc.cs = sortInnerCS;
-	device->CreateComputePSO(&desc, &CPSO_sortInner);
-
-	desc.cs = sortStepCS;
-	device->CreateComputePSO(&desc, &CPSO_sortStep);
-}
-
-void wiGPUSortLib::CleanUpStatic()
-{
-}
-
-
-void wiGPUSortLib::Sort(UINT maxCount, GPUBuffer* comparisonBuffer_read, GPUBuffer* counterBuffer_read, UINT counterReadOffset, GPUBuffer* indexBuffer_write, GRAPHICSTHREAD threadID)
-{
-	static bool init = false;
-	if (!init)
+	void LoadShaders()
 	{
-		Initialize();
-		init = true;
+		std::string path = wiRenderer::GetShaderPath();
+
+		wiRenderer::LoadShader(CS, kickoffSortCS, "gpusortlib_kickoffSortCS.cso");
+		wiRenderer::LoadShader(CS, sortCS, "gpusortlib_sortCS.cso");
+		wiRenderer::LoadShader(CS, sortInnerCS, "gpusortlib_sortInnerCS.cso");
+		wiRenderer::LoadShader(CS, sortStepCS, "gpusortlib_sortStepCS.cso");
+
+	}
+
+	void Initialize()
+	{
+		GPUBufferDesc bd;
+
+		bd.Usage = USAGE_DYNAMIC;
+		bd.CPUAccessFlags = CPU_ACCESS_WRITE;
+		bd.BindFlags = BIND_CONSTANT_BUFFER;
+		bd.MiscFlags = 0;
+		bd.ByteWidth = sizeof(SortConstants);
+		wiRenderer::GetDevice()->CreateBuffer(&bd, nullptr, &sortCB);
+
+
+		bd.Usage = USAGE_DEFAULT;
+		bd.CPUAccessFlags = 0;
+		bd.BindFlags = BIND_UNORDERED_ACCESS;
+		bd.MiscFlags = RESOURCE_MISC_INDIRECT_ARGS | RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+		bd.ByteWidth = sizeof(IndirectDispatchArgs);
+		wiRenderer::GetDevice()->CreateBuffer(&bd, nullptr, &indirectBuffer);
+
+		static wiEvent::Handle handle = wiEvent::Subscribe(SYSTEM_EVENT_RELOAD_SHADERS, [](uint64_t userdata) { LoadShaders(); });
+		LoadShaders();
 	}
 
 
-	GraphicsDevice* device = wiRenderer::GetDevice();
-
-	device->EventBegin("GPUSortLib", threadID);
-
-
-	SortConstants sc;
-	sc.counterReadOffset = counterReadOffset;
-	device->UpdateBuffer(sortCB, &sc, threadID);
-	device->BindConstantBuffer(CS, sortCB, CB_GETBINDSLOT(SortConstants), threadID);
-
-	device->UnBindUnorderedAccessResources(0, 8, threadID);
-
-	// initialize sorting arguments:
+	void Sort(
+		uint32_t maxCount, 
+		const GPUBuffer& comparisonBuffer_read, 
+		const GPUBuffer& counterBuffer_read, 
+		uint32_t counterReadOffset, 
+		const GPUBuffer& indexBuffer_write,
+		CommandList cmd)
 	{
-		device->BindComputePSO(&CPSO_kickoffSort, threadID);
+		GraphicsDevice* device = wiRenderer::GetDevice();
 
-		GPUResource* res[] = {
-			counterBuffer_read,
-		};
-		device->BindResources(CS, res, 0, ARRAYSIZE(res), threadID);
-
-		GPUResource* uavs[] = {
-			indirectBuffer,
-		};
-		device->BindUnorderedAccessResourcesCS(uavs, 0, ARRAYSIZE(uavs), threadID);
-
-		device->Dispatch(1, 1, 1, threadID);
-		device->UAVBarrier(uavs, ARRAYSIZE(uavs), threadID);
-
-		device->UnBindUnorderedAccessResources(0, ARRAYSIZE(uavs), threadID);
-	}
+		device->EventBegin("GPUSortLib", cmd);
 
 
-	GPUResource* uavs[] = {
-		indexBuffer_write,
-	};
-	device->BindUnorderedAccessResourcesCS(uavs, 0, ARRAYSIZE(uavs), threadID);
+		SortConstants sc;
+		sc.counterReadOffset = counterReadOffset;
+		device->UpdateBuffer(&sortCB, &sc, cmd);
+		device->BindConstantBuffer(CS, &sortCB, CB_GETBINDSLOT(SortConstants), cmd);
 
-	GPUResource* resources[] = {
-		counterBuffer_read,
-		comparisonBuffer_read,
-	};
-	device->BindResources(CS, resources, 0, ARRAYSIZE(resources), threadID);
+		device->UnbindUAVs(0, 8, cmd);
 
-	// initial sorting:
-	bool bDone = true;
-	{
-		// calculate how many threads we'll require:
-		//   we'll sort 512 elements per CU (threadgroupsize 256)
-		//     maybe need to optimize this or make it changeable during init
-		//     TGS=256 is a good intermediate value
-
-		unsigned int numThreadGroups = ((maxCount - 1) >> 9) + 1;
-
-		assert(numThreadGroups <= 1024);
-
-		if (numThreadGroups > 1)
+		// initialize sorting arguments:
 		{
-			bDone = false;
+			device->BindComputeShader(&kickoffSortCS, cmd);
+
+			const GPUResource* res[] = {
+				&counterBuffer_read,
+			};
+			device->BindResources(CS, res, 0, arraysize(res), cmd);
+
+			const GPUResource* uavs[] = {
+				&indirectBuffer,
+			};
+			device->BindUAVs(CS, uavs, 0, arraysize(uavs), cmd);
+
+			device->Dispatch(1, 1, 1, cmd);
+
+			GPUBarrier barriers[] = {
+				GPUBarrier::Memory(),
+			};
+			device->Barrier(barriers, arraysize(barriers), cmd);
+
+			device->UnbindUAVs(0, arraysize(uavs), cmd);
+
+			{
+				GPUBarrier barrier;
+				barrier.type = GPUBarrier::BUFFER_BARRIER;
+				barrier.buffer.buffer = &indirectBuffer;
+				barrier.buffer.state_before = BUFFER_STATE_UNORDERED_ACCESS;
+				barrier.buffer.state_after = BUFFER_STATE_INDIRECT_ARGUMENT;
+				device->Barrier(&barrier, 1, cmd);
+			}
 		}
 
-		// sort all buffers of size 512 (and presort bigger ones)
-		device->BindComputePSO(&CPSO_sort, threadID);
-		device->DispatchIndirect(indirectBuffer, 0, threadID);
-		device->UAVBarrier(uavs, ARRAYSIZE(uavs), threadID);
-	}
 
-	int presorted = 512;
-	while (!bDone)
-	{
-		// Incremental sorting:
+		const GPUResource* uavs[] = {
+			&indexBuffer_write,
+		};
+		device->BindUAVs(CS, uavs, 0, arraysize(uavs), cmd);
 
-		bDone = true;
-		device->BindComputePSO(&CPSO_sortStep, threadID);
+		const GPUResource* resources[] = {
+			&counterBuffer_read,
+			&comparisonBuffer_read,
+		};
+		device->BindResources(CS, resources, 0, arraysize(resources), cmd);
 
-		// prepare thread group description data
-		uint32_t numThreadGroups = 0;
-
-		if (maxCount > (uint32_t)presorted)
+		// initial sorting:
+		bool bDone = true;
 		{
-			if (maxCount > (uint32_t)presorted * 2)
+			// calculate how many threads we'll require:
+			//   we'll sort 512 elements per CU (threadgroupsize 256)
+			//     maybe need to optimize this or make it changeable during init
+			//     TGS=256 is a good intermediate value
+
+			unsigned int numThreadGroups = ((maxCount - 1) >> 9) + 1;
+
+			//assert(numThreadGroups <= 1024);
+
+			if (numThreadGroups > 1)
+			{
 				bDone = false;
+			}
 
-			uint32_t pow2 = presorted;
-			while (pow2 < maxCount)
-				pow2 *= 2;
-			numThreadGroups = pow2 >> 9;
+			// sort all buffers of size 512 (and presort bigger ones)
+			device->BindComputeShader(&sortCS, cmd);
+			device->DispatchIndirect(&indirectBuffer, 0, cmd);
+
+			GPUBarrier barriers[] = {
+				GPUBarrier::Memory(),
+			};
+			device->Barrier(barriers, arraysize(barriers), cmd);
 		}
 
-		uint32_t nMergeSize = presorted * 2;
-		for (uint32_t nMergeSubSize = nMergeSize >> 1; nMergeSubSize > 256; nMergeSubSize = nMergeSubSize >> 1)
+		int presorted = 512;
+		while (!bDone)
 		{
-			SortConstants sc;
-			sc.job_params.x = nMergeSubSize;
-			if (nMergeSubSize == nMergeSize >> 1)
-			{
-				sc.job_params.y = (2 * nMergeSubSize - 1);
-				sc.job_params.z = -1;
-			}
-			else
-			{
-				sc.job_params.y = nMergeSubSize;
-				sc.job_params.z = 1;
-			}
-			sc.counterReadOffset = counterReadOffset;
+			// Incremental sorting:
 
-			device->UpdateBuffer(sortCB, &sc, threadID);
-			device->BindConstantBuffer(CS, sortCB, CB_GETBINDSLOT(SortConstants), threadID);
+			bDone = true;
+			device->BindComputeShader(&sortStepCS, cmd);
 
-			device->Dispatch(numThreadGroups, 1, 1, threadID);
-			device->UAVBarrier(uavs, ARRAYSIZE(uavs), threadID);
+			// prepare thread group description data
+			uint32_t numThreadGroups = 0;
+
+			if (maxCount > (uint32_t)presorted)
+			{
+				if (maxCount > (uint32_t)presorted * 2)
+					bDone = false;
+
+				uint32_t pow2 = presorted;
+				while (pow2 < maxCount)
+					pow2 *= 2;
+				numThreadGroups = pow2 >> 9;
+			}
+
+			uint32_t nMergeSize = presorted * 2;
+			for (uint32_t nMergeSubSize = nMergeSize >> 1; nMergeSubSize > 256; nMergeSubSize = nMergeSubSize >> 1)
+			{
+				SortConstants sc;
+				sc.job_params.x = nMergeSubSize;
+				if (nMergeSubSize == nMergeSize >> 1)
+				{
+					sc.job_params.y = (2 * nMergeSubSize - 1);
+					sc.job_params.z = -1;
+				}
+				else
+				{
+					sc.job_params.y = nMergeSubSize;
+					sc.job_params.z = 1;
+				}
+				sc.counterReadOffset = counterReadOffset;
+
+				device->UpdateBuffer(&sortCB, &sc, cmd);
+				device->BindConstantBuffer(CS, &sortCB, CB_GETBINDSLOT(SortConstants), cmd);
+
+				device->Dispatch(numThreadGroups, 1, 1, cmd);
+
+				GPUBarrier barriers[] = {
+					GPUBarrier::Memory(),
+				};
+				device->Barrier(barriers, arraysize(barriers), cmd);
+			}
+
+			device->BindComputeShader(&sortInnerCS, cmd);
+			device->Dispatch(numThreadGroups, 1, 1, cmd);
+
+			GPUBarrier barriers[] = {
+				GPUBarrier::Memory(),
+			};
+			device->Barrier(barriers, arraysize(barriers), cmd);
+
+			presorted *= 2;
 		}
 
-		device->BindComputePSO(&CPSO_sortInner, threadID);
-		device->Dispatch(numThreadGroups, 1, 1, threadID);
-		device->UAVBarrier(uavs, ARRAYSIZE(uavs), threadID);
+		device->UnbindUAVs(0, arraysize(uavs), cmd);
+		device->UnbindResources(0, arraysize(resources), cmd);
 
-		presorted *= 2;
+
+		device->EventEnd(cmd);
 	}
 
-	device->UnBindUnorderedAccessResources(0, ARRAYSIZE(uavs), threadID);
-	device->UnBindResources(0, ARRAYSIZE(resources), threadID);
-
-
-	device->EventEnd(threadID);
 }

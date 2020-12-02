@@ -1,32 +1,22 @@
-#include "postProcessHF.hlsli"
-#include "fogHF.hlsli"
-#include "reconstructPositionHF.hlsli"
+#include "globals.hlsli"
 #include "brdf.hlsli"
-#include "packHF.hlsli"
 #include "objectHF.hlsli"
+#include "ShaderInterop_Postprocess.h"
 
+TEXTURE2D(texture_diffuse, float4, TEXSLOT_ONDEMAND0);
+TEXTURE2D(texture_specular, float4, TEXSLOT_ONDEMAND1);
 
-float4 main(VertexToPixelPostProcess PSIn) : SV_TARGET
+float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD) : SV_TARGET
 {
-	float4 color = texture_gbuffer0[uint2(PSIn.pos.xy)];
-	float emissive = texture_gbuffer2[uint2(PSIn.pos.xy)].a;
+	float3 albedo = texture_gbuffer0[pos.xy].rgb;
+	float  depth = texture_depth[pos.xy];
+	float3 diffuse = texture_diffuse[pos.xy].rgb;
+	float3 specular = texture_specular[pos.xy].rgb;
 
-	float4 g3 = texture_gbuffer3[int2(PSIn.pos.xy)];
-	float roughness = g3.x;
-	float reflectance = g3.y;
-	float metalness = g3.z;
-	float3 albedo = ComputeAlbedo(color, metalness, reflectance);
+	float4 color = float4(albedo * diffuse + specular, 1);
 
-	float  depth = texture_lineardepth[(uint2)PSIn.pos.xy].r * g_xFrame_MainCamera_ZFarP;
+	const float3 P = reconstructPosition(uv, depth);
+	ApplyFog(distance(P, g_xCamera_CamPos), color);
 
-	float4 diffuse = texture_0[uint2(PSIn.pos.xy)]; // light diffuse
-	float4 specular = texture_1[uint2(PSIn.pos.xy)]; // light specular
-	float ssao = texture_2.SampleLevel(sampler_linear_clamp, PSIn.tex.xy, 0).r;
-	float ao = diffuse.a;
-	color.rgb = (GetAmbientColor() * ao * ssao + diffuse.rgb) * albedo + specular.rgb;
-	color.rgb += color.rgb * GetEmissive(emissive);
-
-	ApplyFog(depth, color);
-
-	return color;
+	return max(0, color);
 }

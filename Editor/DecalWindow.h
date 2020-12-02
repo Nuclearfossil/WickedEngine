@@ -1,28 +1,18 @@
 #pragma once
+#include "WickedEngine.h"
 
-struct Material;
-class wiGUI;
-class wiWindow;
-class wiLabel;
-class wiCheckBox;
-class wiSlider;
+class EditorComponent;
 
-struct Decal;
-
-class DecalWindow
+class DecalWindow : public wiWindow
 {
 public:
-	DecalWindow(wiGUI* gui);
-	~DecalWindow();
+	void Create(EditorComponent* editor);
 
-	wiGUI* GUI;
+	wiECS::Entity entity;
+	void SetEntity(wiECS::Entity entity);
 
-	void SetDecal(Decal* decal);
-
-	Decal* decal;
-
-	wiWindow*	decalWindow;
-	wiSlider*	opacitySlider;
-	wiSlider*	emissiveSlider;
+	wiCheckBox placementCheckBox;
+	wiLabel infoLabel;
+	wiTextInputField decalNameField;
 };
 

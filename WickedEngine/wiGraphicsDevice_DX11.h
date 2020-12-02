@@ -1,151 +1,159 @@
-#ifndef _GRAPHICSDEVICE_DX11_H_
-#define _GRAPHICSDEVICE_DX11_H_
+#pragma once
 
+#if __has_include("d3d11_3.h")
+#define WICKEDENGINE_BUILD_DX11
+#endif // HAS DX11
+
+#ifdef WICKEDENGINE_BUILD_DX11
 #include "CommonInclude.h"
 #include "wiGraphicsDevice.h"
-#include "wiWindowRegistration.h"
+#include "wiPlatform.h"
 
-struct ID3D11Device;
-struct IDXGISwapChain1;
-struct ID3D11DeviceContext;
-struct ID3D11CommandList;
-struct ID3DUserDefinedAnnotation;
-enum D3D_DRIVER_TYPE;
-enum D3D_FEATURE_LEVEL;
+#include <d3d11_3.h>
+#include <DXGI1_3.h>
+#include <wrl/client.h> // ComPtr
 
-namespace wiGraphicsTypes
+#include <atomic>
+
+namespace wiGraphics
 {
 
 	class GraphicsDevice_DX11 : public GraphicsDevice
 	{
 	private:
-		ID3D11Device*				device;
-		D3D_DRIVER_TYPE				driverType;
-		D3D_FEATURE_LEVEL			featureLevel;
-		IDXGISwapChain1*			swapChain;
-		ID3D11RenderTargetView*		renderTargetView;
-		ID3D11Texture2D*			backBuffer;
-		ViewPort					viewPort;
-		ID3D11DeviceContext*		deviceContexts[GRAPHICSTHREAD_COUNT];
-		ID3D11CommandList*			commandLists[GRAPHICSTHREAD_COUNT];
-		ID3DUserDefinedAnnotation*	userDefinedAnnotations[GRAPHICSTHREAD_COUNT];
+		D3D_DRIVER_TYPE driverType;
+		D3D_FEATURE_LEVEL featureLevel;
+		Microsoft::WRL::ComPtr<ID3D11Device> device;
+		Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain;
+		Microsoft::WRL::ComPtr<ID3D11RenderTargetView> renderTargetView;
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer;
+		Microsoft::WRL::ComPtr<ID3D11DeviceContext> immediateContext;
+		Microsoft::WRL::ComPtr<ID3D11DeviceContext> deviceContexts[COMMANDLIST_COUNT];
+		Microsoft::WRL::ComPtr<ID3D11CommandList> commandLists[COMMANDLIST_COUNT];
+		Microsoft::WRL::ComPtr<ID3DUserDefinedAnnotation> userDefinedAnnotations[COMMANDLIST_COUNT];
 
-		UINT		stencilRef[GRAPHICSTHREAD_COUNT];
-		XMFLOAT4	blendFactor[GRAPHICSTHREAD_COUNT];
+		uint32_t	stencilRef[COMMANDLIST_COUNT];
+		XMFLOAT4	blendFactor[COMMANDLIST_COUNT];
 
-		ID3D11VertexShader* prev_vs[GRAPHICSTHREAD_COUNT] = {};
-		ID3D11PixelShader* prev_ps[GRAPHICSTHREAD_COUNT] = {};
-		ID3D11HullShader* prev_hs[GRAPHICSTHREAD_COUNT] = {};
-		ID3D11DomainShader* prev_ds[GRAPHICSTHREAD_COUNT] = {};
-		ID3D11GeometryShader* prev_gs[GRAPHICSTHREAD_COUNT] = {};
-		XMFLOAT4 prev_blendfactor[GRAPHICSTHREAD_COUNT] = {};
-		UINT prev_samplemask[GRAPHICSTHREAD_COUNT] = {};
-		ID3D11BlendState* prev_bs[GRAPHICSTHREAD_COUNT] = {};
-		ID3D11RasterizerState* prev_rs[GRAPHICSTHREAD_COUNT] = {};
-		UINT prev_stencilRef[GRAPHICSTHREAD_COUNT] = {};
-		ID3D11DepthStencilState* prev_dss[GRAPHICSTHREAD_COUNT] = {};
-		ID3D11InputLayout* prev_il[GRAPHICSTHREAD_COUNT] = {};
-		PRIMITIVETOPOLOGY prev_pt[GRAPHICSTHREAD_COUNT] = {};
+		ID3D11VertexShader* prev_vs[COMMANDLIST_COUNT] = {};
+		ID3D11PixelShader* prev_ps[COMMANDLIST_COUNT] = {};
+		ID3D11HullShader* prev_hs[COMMANDLIST_COUNT] = {};
+		ID3D11DomainShader* prev_ds[COMMANDLIST_COUNT] = {};
+		ID3D11GeometryShader* prev_gs[COMMANDLIST_COUNT] = {};
+		ID3D11ComputeShader* prev_cs[COMMANDLIST_COUNT] = {};
+		XMFLOAT4 prev_blendfactor[COMMANDLIST_COUNT] = {};
+		uint32_t prev_samplemask[COMMANDLIST_COUNT] = {};
+		ID3D11BlendState* prev_bs[COMMANDLIST_COUNT] = {};
+		ID3D11RasterizerState* prev_rs[COMMANDLIST_COUNT] = {};
+		uint32_t prev_stencilRef[COMMANDLIST_COUNT] = {};
+		ID3D11DepthStencilState* prev_dss[COMMANDLIST_COUNT] = {};
+		ID3D11InputLayout* prev_il[COMMANDLIST_COUNT] = {};
+		PRIMITIVETOPOLOGY prev_pt[COMMANDLIST_COUNT] = {};
+
+		const PipelineState* active_pso[COMMANDLIST_COUNT] = {};
+		bool dirty_pso[COMMANDLIST_COUNT] = {};
+		void pso_validate(CommandList cmd);
+
+		const RenderPass* active_renderpass[COMMANDLIST_COUNT] = {};
+
+		ID3D11UnorderedAccessView* raster_uavs[COMMANDLIST_COUNT][8] = {};
+		uint8_t raster_uavs_slot[COMMANDLIST_COUNT] = {};
+		uint8_t raster_uavs_count[COMMANDLIST_COUNT] = {};
+		void validate_raster_uavs(CommandList cmd);
+
+		struct GPUAllocator
+		{
+			GPUBuffer buffer;
+			size_t byteOffset = 0;
+			uint64_t residentFrame = 0;
+			bool dirty = false;
+		} frame_allocators[COMMANDLIST_COUNT];
+		void commit_allocations(CommandList cmd);
+
+		void CreateBackBufferResources();
+
+		std::atomic<CommandList> cmd_count{ 0 };
+
+		struct EmptyResourceHandle {}; // only care about control-block
+		std::shared_ptr<EmptyResourceHandle> emptyresource;
 
 	public:
-		GraphicsDevice_DX11(wiWindowRegistration::window_type window, bool fullscreen = false, bool debuglayer = false);
+		GraphicsDevice_DX11(wiPlatform::window_type window, bool fullscreen = false, bool debuglayer = false);
 
-		~GraphicsDevice_DX11();
+		bool CreateBuffer(const GPUBufferDesc *pDesc, const SubresourceData* pInitialData, GPUBuffer *pBuffer) override;
+		bool CreateTexture(const TextureDesc* pDesc, const SubresourceData *pInitialData, Texture *pTexture) override;
+		bool CreateInputLayout(const InputLayoutDesc *pInputElementDescs, uint32_t NumElements, const Shader* shader, InputLayout *pInputLayout) override;
+		bool CreateShader(SHADERSTAGE stage, const void *pShaderBytecode, size_t BytecodeLength, Shader *pShader) override;
+		bool CreateBlendState(const BlendStateDesc *pBlendStateDesc, BlendState *pBlendState) override;
+		bool CreateDepthStencilState(const DepthStencilStateDesc *pDepthStencilStateDesc, DepthStencilState *pDepthStencilState) override;
+		bool CreateRasterizerState(const RasterizerStateDesc *pRasterizerStateDesc, RasterizerState *pRasterizerState) override;
+		bool CreateSampler(const SamplerDesc *pSamplerDesc, Sampler *pSamplerState) override;
+		bool CreateQuery(const GPUQueryDesc *pDesc, GPUQuery *pQuery) override;
+		bool CreatePipelineState(const PipelineStateDesc* pDesc, PipelineState* pso) override;
+		bool CreateRenderPass(const RenderPassDesc* pDesc, RenderPass* renderpass) override;
 
-		virtual HRESULT CreateBuffer(const GPUBufferDesc *pDesc, const SubresourceData* pInitialData, GPUBuffer *ppBuffer) override;
-		virtual HRESULT CreateTexture1D(const TextureDesc* pDesc, const SubresourceData *pInitialData, Texture1D **ppTexture1D) override;
-		virtual HRESULT CreateTexture2D(const TextureDesc* pDesc, const SubresourceData *pInitialData, Texture2D **ppTexture2D) override;
-		virtual HRESULT CreateTexture3D(const TextureDesc* pDesc, const SubresourceData *pInitialData, Texture3D **ppTexture3D) override;
-		virtual HRESULT CreateInputLayout(const VertexLayoutDesc *pInputElementDescs, UINT NumElements,
-			const void *pShaderBytecodeWithInputSignature, SIZE_T BytecodeLength, VertexLayout *pInputLayout) override;
-		virtual HRESULT CreateVertexShader(const void *pShaderBytecode, SIZE_T BytecodeLength, VertexShader *pVertexShader) override;
-		virtual HRESULT CreatePixelShader(const void *pShaderBytecode, SIZE_T BytecodeLength, PixelShader *pPixelShader) override;
-		virtual HRESULT CreateGeometryShader(const void *pShaderBytecode, SIZE_T BytecodeLength, GeometryShader *pGeometryShader) override;
-		virtual HRESULT CreateHullShader(const void *pShaderBytecode, SIZE_T BytecodeLength, HullShader *pHullShader) override;
-		virtual HRESULT CreateDomainShader(const void *pShaderBytecode, SIZE_T BytecodeLength, DomainShader *pDomainShader) override;
-		virtual HRESULT CreateComputeShader(const void *pShaderBytecode, SIZE_T BytecodeLength, ComputeShader *pComputeShader) override;
-		virtual HRESULT CreateBlendState(const BlendStateDesc *pBlendStateDesc, BlendState *pBlendState) override;
-		virtual HRESULT CreateDepthStencilState(const DepthStencilStateDesc *pDepthStencilStateDesc, DepthStencilState *pDepthStencilState) override;
-		virtual HRESULT CreateRasterizerState(const RasterizerStateDesc *pRasterizerStateDesc, RasterizerState *pRasterizerState) override;
-		virtual HRESULT CreateSamplerState(const SamplerDesc *pSamplerDesc, Sampler *pSamplerState) override;
-		virtual HRESULT CreateQuery(const GPUQueryDesc *pDesc, GPUQuery *pQuery) override;
-		virtual HRESULT CreateGraphicsPSO(const GraphicsPSODesc* pDesc, GraphicsPSO* pso) override;
-		virtual HRESULT CreateComputePSO(const ComputePSODesc* pDesc, ComputePSO* pso) override;
+		int CreateSubresource(Texture* texture, SUBRESOURCE_TYPE type, uint32_t firstSlice, uint32_t sliceCount, uint32_t firstMip, uint32_t mipCount) override;
+		int CreateSubresource(GPUBuffer* buffer, SUBRESOURCE_TYPE type, uint64_t offset, uint64_t size = ~0) override;
 
-		virtual void PresentBegin() override;
-		virtual void PresentEnd() override;
+		void Map(const GPUResource* resource, Mapping* mapping) override;
+		void Unmap(const GPUResource* resource) override;
+		bool QueryRead(const GPUQuery* query, GPUQueryResult* result) override;
 
-		virtual void ExecuteDeferredContexts() override;
-		virtual void FinishCommandList(GRAPHICSTHREAD thread) override;
+		void SetName(GPUResource* pResource, const char* name) override;
 
-		virtual void SetResolution(int width, int height) override;
+		void PresentBegin(CommandList cmd) override;
+		void PresentEnd(CommandList cmd) override;
 
-		virtual Texture2D GetBackBuffer() override;
+		void WaitForGPU() override;
+
+		CommandList BeginCommandList() override;
+		void SubmitCommandLists() override;
+
+		void SetResolution(int width, int height) override;
+
+		Texture GetBackBuffer() override;
 
 		///////////////Thread-sensitive////////////////////////
 
-		virtual void BindViewports(UINT NumViewports, const ViewPort *pViewports, GRAPHICSTHREAD threadID) override;
-		virtual void BindRenderTargetsUAVs(UINT NumViews, Texture2D* const *ppRenderTargets, Texture2D* depthStencilTexture, GPUResource* const *ppUAVs, int slotUAV, int countUAV,
-			GRAPHICSTHREAD threadID, int arrayIndex = -1) override;
-		virtual void BindRenderTargets(UINT NumViews, Texture2D* const *ppRenderTargets, Texture2D* depthStencilTexture, GRAPHICSTHREAD threadID, int arrayIndex = -1) override;
-		virtual void ClearRenderTarget(Texture* pTexture, const FLOAT ColorRGBA[4], GRAPHICSTHREAD threadID, int arrayIndex = -1) override;
-		virtual void ClearDepthStencil(Texture2D* pTexture, UINT ClearFlags, FLOAT Depth, UINT8 Stencil, GRAPHICSTHREAD threadID, int arrayIndex = -1) override;
-		virtual void BindResource(SHADERSTAGE stage, GPUResource* resource, int slot, GRAPHICSTHREAD threadID, int arrayIndex = -1) override;
-		virtual void BindResources(SHADERSTAGE stage, GPUResource *const* resources, int slot, int count, GRAPHICSTHREAD threadID) override;
-		virtual void BindUnorderedAccessResourceCS(GPUResource* resource, int slot, GRAPHICSTHREAD threadID, int arrayIndex = -1) override;
-		virtual void BindUnorderedAccessResourcesCS(GPUResource *const* resources, int slot, int count, GRAPHICSTHREAD threadID) override;
-		virtual void UnBindResources(int slot, int num, GRAPHICSTHREAD threadID) override;
-		virtual void UnBindUnorderedAccessResources(int slot, int num, GRAPHICSTHREAD threadID) override;
-		virtual void BindSampler(SHADERSTAGE stage, Sampler* sampler, int slot, GRAPHICSTHREAD threadID) override;
-		virtual void BindConstantBuffer(SHADERSTAGE stage, GPUBuffer* buffer, int slot, GRAPHICSTHREAD threadID) override;
-		virtual void BindVertexBuffers(GPUBuffer* const *vertexBuffers, int slot, int count, const UINT* strides, const UINT* offsets, GRAPHICSTHREAD threadID) override;
-		virtual void BindIndexBuffer(GPUBuffer* indexBuffer, const INDEXBUFFER_FORMAT format, UINT offset, GRAPHICSTHREAD threadID) override;
-		virtual void BindStencilRef(UINT value, GRAPHICSTHREAD threadID) override;
-		virtual void BindBlendFactor(XMFLOAT4 value, GRAPHICSTHREAD threadID) override;
-		virtual void BindGraphicsPSO(GraphicsPSO* pso, GRAPHICSTHREAD threadID) override;
-		virtual void BindComputePSO(ComputePSO* pso, GRAPHICSTHREAD threadID) override;
-		virtual void Draw(int vertexCount, UINT startVertexLocation, GRAPHICSTHREAD threadID) override;
-		virtual void DrawIndexed(int indexCount, UINT startIndexLocation, UINT baseVertexLocation, GRAPHICSTHREAD threadID) override;
-		virtual void DrawInstanced(int vertexCount, int instanceCount, UINT startVertexLocation, UINT startInstanceLocation, GRAPHICSTHREAD threadID) override;
-		virtual void DrawIndexedInstanced(int indexCount, int instanceCount, UINT startIndexLocation, UINT baseVertexLocation, UINT startInstanceLocation, GRAPHICSTHREAD threadID) override;
-		virtual void DrawInstancedIndirect(GPUBuffer* args, UINT args_offset, GRAPHICSTHREAD threadID) override;
-		virtual void DrawIndexedInstancedIndirect(GPUBuffer* args, UINT args_offset, GRAPHICSTHREAD threadID) override;
-		virtual void Dispatch(UINT threadGroupCountX, UINT threadGroupCountY, UINT threadGroupCountZ, GRAPHICSTHREAD threadID) override;
-		virtual void DispatchIndirect(GPUBuffer* args, UINT args_offset, GRAPHICSTHREAD threadID) override;
-		virtual void GenerateMips(Texture* texture, GRAPHICSTHREAD threadID, int arrayIndex = -1) override;
-		virtual void CopyTexture2D(Texture2D* pDst, Texture2D* pSrc, GRAPHICSTHREAD threadID) override;
-		virtual void CopyTexture2D_Region(Texture2D* pDst, UINT dstMip, UINT dstX, UINT dstY, Texture2D* pSrc, UINT srcMip, GRAPHICSTHREAD threadID) override;
-		virtual void MSAAResolve(Texture2D* pDst, Texture2D* pSrc, GRAPHICSTHREAD threadID) override;
-		virtual void UpdateBuffer(GPUBuffer* buffer, const void* data, GRAPHICSTHREAD threadID, int dataSize = -1) override;
-		virtual void* AllocateFromRingBuffer(GPURingBuffer* buffer, size_t dataSize, UINT& offsetIntoBuffer, GRAPHICSTHREAD threadID) override;
-		virtual void InvalidateBufferAccess(GPUBuffer* buffer, GRAPHICSTHREAD threadID) override;
-		virtual bool DownloadBuffer(GPUBuffer* bufferToDownload, GPUBuffer* bufferDest, void* dataDest, GRAPHICSTHREAD threadID) override;
-		virtual void SetScissorRects(UINT numRects, const Rect* rects, GRAPHICSTHREAD threadID) override;
-		virtual void QueryBegin(GPUQuery *query, GRAPHICSTHREAD threadID) override;
-		virtual void QueryEnd(GPUQuery *query, GRAPHICSTHREAD threadID) override;
-		virtual bool QueryRead(GPUQuery *query, GRAPHICSTHREAD threadID) override;
-		virtual void UAVBarrier(GPUResource *const* uavs, UINT NumBarriers, GRAPHICSTHREAD threadID) override {};
-		virtual void TransitionBarrier(GPUResource *const* resources, UINT NumBarriers, RESOURCE_STATES stateBefore, RESOURCE_STATES stateAfter, GRAPHICSTHREAD threadID) override {};
+		void RenderPassBegin(const RenderPass* renderpass, CommandList cmd) override;
+		void RenderPassEnd(CommandList cmd) override;
+		void BindScissorRects(uint32_t numRects, const Rect* rects, CommandList cmd) override;
+		void BindViewports(uint32_t NumViewports, const Viewport* pViewports, CommandList cmd) override;
+		void BindResource(SHADERSTAGE stage, const GPUResource* resource, uint32_t slot, CommandList cmd, int subresource = -1) override;
+		void BindResources(SHADERSTAGE stage, const GPUResource *const* resources, uint32_t slot, uint32_t count, CommandList cmd) override;
+		void BindUAV(SHADERSTAGE stage, const GPUResource* resource, uint32_t slot, CommandList cmd, int subresource = -1) override;
+		void BindUAVs(SHADERSTAGE stage, const GPUResource *const* resources, uint32_t slot, uint32_t count, CommandList cmd) override;
+		void UnbindResources(uint32_t slot, uint32_t num, CommandList cmd) override;
+		void UnbindUAVs(uint32_t slot, uint32_t num, CommandList cmd) override;
+		void BindSampler(SHADERSTAGE stage, const Sampler* sampler, uint32_t slot, CommandList cmd) override;
+		void BindConstantBuffer(SHADERSTAGE stage, const GPUBuffer* buffer, uint32_t slot, CommandList cmd) override;
+		void BindVertexBuffers(const GPUBuffer *const* vertexBuffers, uint32_t slot, uint32_t count, const uint32_t* strides, const uint32_t* offsets, CommandList cmd) override;
+		void BindIndexBuffer(const GPUBuffer* indexBuffer, const INDEXBUFFER_FORMAT format, uint32_t offset, CommandList cmd) override;
+		void BindStencilRef(uint32_t value, CommandList cmd) override;
+		void BindBlendFactor(float r, float g, float b, float a, CommandList cmd) override;
+		void BindPipelineState(const PipelineState* pso, CommandList cmd) override;
+		void BindComputeShader(const Shader* cs, CommandList cmd) override;
+		void Draw(uint32_t vertexCount, uint32_t startVertexLocation, CommandList cmd) override;
+		void DrawIndexed(uint32_t indexCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, CommandList cmd) override;
+		void DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation, CommandList cmd) override;
+		void DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, uint32_t startInstanceLocation, CommandList cmd) override;
+		void DrawInstancedIndirect(const GPUBuffer* args, uint32_t args_offset, CommandList cmd) override;
+		void DrawIndexedInstancedIndirect(const GPUBuffer* args, uint32_t args_offset, CommandList cmd) override;
+		void Dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ, CommandList cmd) override;
+		void DispatchIndirect(const GPUBuffer* args, uint32_t args_offset, CommandList cmd) override;
+		void CopyResource(const GPUResource* pDst, const GPUResource* pSrc, CommandList cmd) override;
+		void UpdateBuffer(const GPUBuffer* buffer, const void* data, CommandList cmd, int dataSize = -1) override;
+		void QueryBegin(const GPUQuery *query, CommandList cmd) override;
+		void QueryEnd(const GPUQuery *query, CommandList cmd) override;
+		void Barrier(const GPUBarrier* barriers, uint32_t numBarriers, CommandList cmd) override {}
 
-		virtual void WaitForGPU() override;
+		GPUAllocation AllocateGPU(size_t dataSize, CommandList cmd) override;
 
-		virtual HRESULT CreateTextureFromFile(const std::string& fileName, Texture2D **ppTexture, bool mipMaps, GRAPHICSTHREAD threadID) override;
-		virtual HRESULT SaveTexturePNG(const std::string& fileName, Texture2D *pTexture, GRAPHICSTHREAD threadID) override;
-		virtual HRESULT SaveTextureDDS(const std::string& fileName, Texture *pTexture, GRAPHICSTHREAD threadID) override;
-
-		virtual void EventBegin(const std::string& name, GRAPHICSTHREAD threadID) override;
-		virtual void EventEnd(GRAPHICSTHREAD threadID) override;
-		virtual void SetMarker(const std::string& name, GRAPHICSTHREAD threadID) override;
-
-	private:
-		HRESULT CreateShaderResourceView(Texture1D* pTexture);
-		HRESULT CreateShaderResourceView(Texture2D* pTexture);
-		HRESULT CreateShaderResourceView(Texture3D* pTexture);
-		HRESULT CreateRenderTargetView(Texture2D* pTexture);
-		HRESULT CreateRenderTargetView(Texture3D* pTexture);
-		HRESULT CreateDepthStencilView(Texture2D* pTexture);
+		void EventBegin(const char* name, CommandList cmd) override;
+		void EventEnd(CommandList cmd) override;
+		void SetMarker(const char* name, CommandList cmd) override;
 	};
 
 }
 
-#endif // _GRAPHICSDEVICE_DX11_H_
+#endif // WICKEDENGINE_BUILD_DX11

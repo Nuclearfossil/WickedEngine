@@ -1,29 +1,44 @@
 #include "wiStartupArguments.h"
+#include "wiHelper.h"
 
 #include <vector>
 #include <sstream>
 #include <iterator>
+#include <set>
 
 using namespace std;
 
-set<string> wiStartupArguments::params;
-
-void wiStartupArguments::Parse(const wchar_t* args)
+namespace wiStartupArguments
 {
-	wstring tmp = args;
-	string tmp1(tmp.begin(), tmp.end());
+	set<string> params;
 
-	istringstream iss(tmp1);
+	void Parse(const wchar_t* args)
+	{
+		wstring from = args;
+		string to;
+		wiHelper::StringConvert(from, to);
 
-	params = 
-	{ 
-		istream_iterator<string>{iss},
-		istream_iterator<string>{} 
-	};
+		istringstream iss(to);
 
-}
+		params =
+		{
+			istream_iterator<string>{iss},
+			istream_iterator<string>{}
+		};
 
-bool wiStartupArguments::HasArgument(const std::string& value)
-{
-	return params.find(value) != params.end();
+	}
+
+	void Parse(int argc, char *argv[])
+    {
+	    for (int i=1; i<argc; i++)
+        {
+	        params.insert(std::string(argv[i]));
+        }
+    }
+
+	bool HasArgument(const std::string& value)
+	{
+		return params.find(value) != params.end();
+	}
+
 }

@@ -1,14 +1,13 @@
 #define DISABLE_TRANSPARENT_SHADOWMAP
-#include "deferredLightHF.hlsli"
-#include "fogHF.hlsli"
+#include "volumetricLightHF.hlsli"
 
 float4 main(VertexToPixel input) : SV_TARGET
 {
-	ShaderEntityType light = EntityArray[(uint)g_xColor.x];
+	ShaderEntity light = EntityArray[(uint)g_xColor.x];
 
 	float2 ScreenCoord = input.pos2D.xy / input.pos2D.w * float2(0.5f, -0.5f) + 0.5f;
 	float depth = max(input.pos.z, texture_depth.SampleLevel(sampler_linear_clamp, ScreenCoord, 0));
-	float3 P = getPosition(ScreenCoord, depth);
+	float3 P = reconstructPosition(ScreenCoord, depth);
 	float3 V = g_xCamera_CamPos - P;
 	float cameraDistance = length(V);
 	V /= cameraDistance;
@@ -24,26 +23,32 @@ float4 main(VertexToPixel input) : SV_TARGET
 		rayEnd = rayEnd - t * V;
 	}
 
-	const uint sampleCount = 128;
+	const uint sampleCount = 16;
 	const float stepSize = length(P - rayEnd) / sampleCount;
+
+	// dither ray start to help with undersampling:
+	P = P + V * stepSize * dither(input.pos.xy);
 
 	// Perform ray marching to integrate light volume along view ray:
 	[loop]
 	for(uint i = 0; i < sampleCount; ++i)
 	{
 		float3 L = light.positionWS - P;
-		float dist = length(L);
+		const float3 Lunnormalized = L;
+		const float dist2 = dot(L, L);
+		const float dist = sqrt(dist2);
 		L /= dist;
 
-		float att = (light.energy * (light.range / (light.range + 1 + dist)));
-		float attenuation = (att * (light.range - dist) / light.range);
+		const float range2 = light.range * light.range;
+		const float att = saturate(1.0 - (dist2 / range2));
+		float attenuation = att * att;
 
 		[branch]
-		if (light.additionalData_index >= 0) {
-			attenuation *= texture_shadowarray_cube.SampleCmpLevelZero(sampler_cmp_depth, float4(-L, light.additionalData_index), 1 - dist / light.range * (1 - light.shadowBias)).r;
+		if (light.IsCastingShadow()) {
+			attenuation *= shadowCube(light, Lunnormalized);
 		}
 
-		attenuation *= GetFog(cameraDistance - marchedDistance);
+		attenuation *= GetFogAmount(cameraDistance - marchedDistance);
 
 		accumulation += attenuation;
 

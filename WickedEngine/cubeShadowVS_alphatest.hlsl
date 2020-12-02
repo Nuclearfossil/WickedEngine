@@ -1,25 +1,28 @@
 #include "globals.hlsli"
 #include "objectInputLayoutHF.hlsli"
-#include "windHF.hlsli"
 
-
-struct GS_CUBEMAP_IN
+struct VertexOut
 {
-	float4 Pos		: SV_POSITION;    // World position 
-	float2 Tex		: TEXCOORD0;      // Texture coord
+	float4 pos		: SV_POSITION;
+	float2 uv		: UV;
+#ifdef VPRT_EMULATION
+	uint RTIndex	: RTINDEX;
+#else
+	uint RTIndex	: SV_RenderTargetArrayIndex;
+#endif // VPRT_EMULATION
 };
 
-GS_CUBEMAP_IN main(Input_Object_POS_TEX input)
+VertexOut main(Input_Object_POS_TEX input)
 {
-	GS_CUBEMAP_IN Out;
+	VertexOut output;
 
-	float4x4 WORLD = MakeWorldMatrixFromInstance(input.instance);
+	float4x4 WORLD = MakeWorldMatrixFromInstance(input.inst);
 	VertexSurface surface = MakeVertexSurfaceFromInput(input);
 
-	Out.Pos = mul(surface.position, WORLD);
-	affectWind(Out.Pos.xyz, surface.wind, g_xFrame_Time);
-	Out.Tex = surface.uv;
+	uint frustum_index = input.inst.userdata.y;
+	output.RTIndex = xCubemapRenderCams[frustum_index].properties.x;
+	output.pos = mul(xCubemapRenderCams[frustum_index].VP, mul(WORLD, surface.position));
+	output.uv = g_xMaterial.uvset_baseColorMap == 0 ? surface.uvsets.xy : surface.uvsets.zw;
 
-
-	return Out;
+	return output;
 }

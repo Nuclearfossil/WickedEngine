@@ -1,7 +1,5 @@
 #include "globals.hlsli"
 #include "ShaderInterop_EmittedParticle.h"
-#include "reconstructPositionHF.hlsli"
-#include "depthConvertHF.hlsli"
 
 RWSTRUCTUREDBUFFER(particleBuffer, Particle, 0);
 RWSTRUCTUREDBUFFER(aliveBuffer_CURRENT, uint, 1);
@@ -16,7 +14,7 @@ struct LDS_ForceField
 	uint type;
 	float3 position;
 	float gravity;
-	float range_inverse;
+	float range_rcp;
 	float3 normal;
 };
 groupshared LDS_ForceField forceFields[NUM_LDS_FORCEFIELDS];
@@ -36,12 +34,12 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 	if (Gid < numForceFields)
 	{
 		uint forceFieldID = g_xFrame_ForceFieldArrayOffset + Gid;
-		ShaderEntityType forceField = EntityArray[forceFieldID];
+		ShaderEntity forceField = EntityArray[forceFieldID];
 
-		forceFields[Gid].type = (uint)forceField.type;
+		forceFields[Gid].type = (uint)forceField.GetType();
 		forceFields[Gid].position = forceField.positionWS;
 		forceFields[Gid].gravity = forceField.energy;
-		forceFields[Gid].range_inverse = forceField.range;
+		forceFields[Gid].range_rcp = forceField.range; // it is actually uploaded from CPU as 1.0f / range
 		forceFields[Gid].normal = forceField.directionWS;
 	}
 
@@ -75,7 +73,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 					dir = forceField.normal;
 				}
 
-				particle.force += dir * forceField.gravity * (1 - saturate(dist * forceField.range_inverse));
+				particle.force += dir * forceField.gravity * (1 - saturate(dist * forceField.range_rcp));
 			}
 
 
@@ -83,15 +81,15 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 
 			// NOTE: We are using the textures from previous frame, so reproject against those! (PrevVP)
 
-			float4 pos2D = mul(float4(particle.position, 1), g_xFrame_MainCamera_PrevVP);
+			float4 pos2D = mul(g_xCamera_PrevVP, float4(particle.position, 1));
 			pos2D.xyz /= pos2D.w;
 
 			if (pos2D.x > -1 && pos2D.x < 1 && pos2D.y > -1 && pos2D.y < 1)
 			{
 				float2 uv = pos2D.xy * float2(0.5f, -0.5f) + 0.5f;
-				uint2 pixel = uv * g_xWorld_InternalResolution;
+				uint2 pixel = uv * g_xFrame_InternalResolution;
 
-				float depth0 = texture_depth[pixel + uint2(0, 0)];
+				float depth0 = texture_depth[pixel];
 				float surfaceLinearDepth = getLinearDepth(depth0);
 				float surfaceThickness = 1.5f;
 
@@ -103,16 +101,19 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 				{
 					// Calculate surface normal and bounce off the particle:
 					float depth1 = texture_depth[pixel + uint2(1, 0)];
-					float depth2 = texture_depth[pixel + uint2(0, 1)];
+					float depth2 = texture_depth[pixel + uint2(0, -1)];
 
-					float3 p0 = getPositionEx(uv, depth0, g_xFrame_MainCamera_PrevInvVP);
-					float3 p1 = getPositionEx(uv, depth1, g_xFrame_MainCamera_PrevInvVP);
-					float3 p2 = getPositionEx(uv, depth2, g_xFrame_MainCamera_PrevInvVP);
+					float3 p0 = reconstructPosition(uv, depth0, g_xCamera_PrevInvVP);
+					float3 p1 = reconstructPosition(uv + float2(1, 0) * g_xFrame_InternalResolution_rcp, depth1, g_xCamera_PrevInvVP);
+					float3 p2 = reconstructPosition(uv + float2(0, -1) * g_xFrame_InternalResolution_rcp, depth2, g_xCamera_PrevInvVP);
 
 					float3 surfaceNormal = normalize(cross(p2 - p0, p1 - p0));
 
-					const float restitution = 0.98f;
-					particle.velocity = reflect(particle.velocity, surfaceNormal) * restitution;
+					if (dot(particle.velocity, surfaceNormal) < 0)
+					{
+						const float restitution = 0.98f;
+						particle.velocity = reflect(particle.velocity, surfaceNormal) * restitution;
+					}
 				}
 			}
 
@@ -125,7 +126,8 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 			// reset force for next frame:
 			particle.force = 0;
 
-			if (xSPH_ENABLED)
+			[branch]
+			if (xEmitterOptions & EMITTER_OPTION_BIT_SPH_ENABLED)
 			{
 				// drag: 
 				particle.velocity *= 0.98f;
@@ -186,7 +188,7 @@ void main(uint3 DTid : SV_DispatchThreadID, uint Gid : SV_GroupIndex)
 
 #ifdef SORTING
 			// store squared distance to main camera:
-			float3 eyeVector = particle.position - g_xFrame_MainCamera_CamPos;
+			float3 eyeVector = particle.position - g_xCamera_CamPos;
 			float distSQ = dot(eyeVector, eyeVector);
 			distanceBuffer[particleIndex] = -distSQ; // this can be negated to modify sorting order here instead of rewriting sorting shaders...
 #endif // SORTING

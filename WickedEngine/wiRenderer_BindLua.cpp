@@ -1,285 +1,24 @@
 #include "wiRenderer_BindLua.h"
 #include "wiRenderer.h"
-#include "wiLines.h"
-#include "wiLoader.h"
 #include "wiHelper.h"
-#include "wiLoader_BindLua.h"
+#include "wiScene.h"
+#include "wiScene_BindLua.h"
 #include "Vector_BindLua.h"
 #include "Matrix_BindLua.h"
-#include "wiWaterPlane.h"
 #include "Texture_BindLua.h"
 #include "wiEmittedParticle.h"
 #include "wiHairParticle.h"
-#include "wiPHYSICS.h"
+#include "wiIntersect_BindLua.h"
 
 using namespace std;
-using namespace wiGraphicsTypes;
+using namespace wiECS;
+using namespace wiGraphics;
+using namespace wiScene;
+using namespace wiScene_BindLua;
+using namespace wiIntersect_BindLua;
 
 namespace wiRenderer_BindLua
 {
-
-	void AddTransformName(Transform* root, stringstream& ss)
-	{
-		if (root == nullptr)
-			return;
-		ss << root->name << endl;
-		for (auto x : root->children)
-		{
-			if (x != nullptr)
-			{
-				AddTransformName(x, ss);
-			}
-		}
-	}
-	int GetTransforms(lua_State* L)
-	{
-		stringstream ss("");
-		AddTransformName(wiRenderer::GetScene().GetWorldNode(), ss);
-		wiLua::SSetString(L, ss.str());
-		return 1;
-	}
-	int GetTransform(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			string name = wiLua::SGetString(L, 1);
-			Transform* transform = wiRenderer::getTransformByName(name);
-			if (transform != nullptr)
-			{
-				Object* object = dynamic_cast<Object*>(transform);
-				if (object != nullptr)
-				{
-					Luna<Object_BindLua>::push(L, new Object_BindLua(object));
-					return 1;
-				}
-				Armature* armature = dynamic_cast<Armature*>(transform);
-				if (armature != nullptr)
-				{
-					Luna<Armature_BindLua>::push(L, new Armature_BindLua(armature));
-					return 1;
-				}
-
-				Luna<Transform_BindLua>::push(L, new Transform_BindLua(transform));
-				return 1;
-			}
-			else
-			{
-				wiLua::SError(L, "GetTransform(String name) transform not found!");
-				return 0;
-			}
-		}
-		return 0;
-	}
-	int GetArmatures(lua_State* L)
-	{
-		stringstream ss("");
-		for (auto& m : wiRenderer::GetScene().models)
-		{
-			for (auto& x : m->armatures)
-			{
-				ss << x->name << endl;
-			}
-		}
-		wiLua::SSetString(L, ss.str());
-		return 1;
-	}
-	int GetArmature(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			string name = wiLua::SGetString(L, 1);
-			Armature* armature = wiRenderer::getArmatureByName(name);
-			if (armature != nullptr)
-			{
-				Luna<Armature_BindLua>::push(L, new Armature_BindLua(armature));
-				return 1;
-			}
-			else
-			{
-				wiLua::SError(L, "GetArmature(String name) armature not found!");
-				return 0;
-			}
-		}
-		return 0;
-	}
-	int GetObjects(lua_State* L)
-	{
-		stringstream ss("");
-		for (auto& m : wiRenderer::GetScene().models)
-		{
-			for (auto& x : m->objects)
-			{
-				ss << x->name << endl;
-			}
-		}
-		wiLua::SSetString(L, ss.str());
-		return 1;
-	}
-	int GetObjectLua(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			string name = wiLua::SGetString(L, 1);
-			Object* object = wiRenderer::getObjectByName(name);
-			if (object != nullptr)
-			{
-				Luna<Object_BindLua>::push(L, new Object_BindLua(object));
-				return 1;
-			}
-			else
-			{
-				wiLua::SError(L, "GetObject(String name) object not found!");
-				return 0;
-			}
-		}
-		return 0;
-	}
-	int GetEmitters(lua_State* L)
-	{
-		stringstream ss("");
-		for (auto& x : wiRenderer::emitterSystems)
-		{
-			ss << x->name << endl;
-		}
-		wiLua::SSetString(L, ss.str());
-		return 1;
-		return 0;
-	}
-	int GetEmitter(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			string name = wiLua::SGetString(L, 1);
-			int i = 0;
-			for (auto& x : wiRenderer::emitterSystems)
-			{
-				if (!x->name.compare(name))
-				{
-					Luna<EmittedParticle_BindLua>::push(L, new EmittedParticle_BindLua(x));
-					++i;
-				}
-			}
-			if (i > 0)
-			{
-				return i;
-			}
-			wiLua::SError(L, "GetEmitter(string name) no emitter by that name!");
-		}
-		else
-		{
-			wiLua::SError(L, "GetEmitter(string name) not enough arguments!");
-		}
-		return 0;
-	}
-	int GetMeshes(lua_State* L)
-	{
-		stringstream ss("");
-		for (auto& m : wiRenderer::GetScene().models)
-		{
-			for (auto& x : m->meshes)
-			{
-				ss << x.first << endl;
-			}
-		}
-		wiLua::SSetString(L, ss.str());
-		return 1;
-	}
-	int GetLights(lua_State* L)
-	{
-		stringstream ss("");
-		for (auto& m : wiRenderer::GetScene().models)
-		{
-			for (auto& x : m->lights)
-			{
-				ss << x->name << endl;
-			}
-		}
-		wiLua::SSetString(L, ss.str());
-		return 1;
-	}
-	int GetMaterials(lua_State* L)
-	{
-		stringstream ss("");
-		for (auto& m : wiRenderer::GetScene().models)
-		{
-			for (auto& x : m->materials)
-			{
-				ss << x.first << endl;
-			}
-		}
-		wiLua::SSetString(L, ss.str());
-		return 1;
-	}
-	int GetMaterial(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			string name = wiLua::SGetString(L, 1);
-			Material* mat = wiRenderer::getMaterialByName(name);
-			if (mat != nullptr)
-			{
-				Luna<Material_BindLua>::push(L, new Material_BindLua(mat));
-				return 1;
-			}
-		}
-		return 0;
-	}
-	int GetGameSpeed(lua_State* L)
-	{
-		wiLua::SSetFloat(L, wiRenderer::GetGameSpeed());
-		return 1;
-	}
-	int GetScreenWidth(lua_State* L)
-	{
-		wiLua::SSetInt(L, wiRenderer::GetDevice()->GetScreenWidth());
-		return 1;
-	}
-	int GetScreenHeight(lua_State* L)
-	{
-		wiLua::SSetInt(L, wiRenderer::GetDevice()->GetScreenHeight());
-		return 1;
-	}
-	int GetCamera(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			string name = wiLua::SGetString(L, 1);
-			Camera* camera = wiRenderer::getCameraByName(name);
-			if (camera != nullptr)
-			{
-				Luna<Camera_BindLua>::push(L, new Camera_BindLua(camera));
-				return 1;
-			}
-			else
-			{
-				wiLua::SError(L, "GetCamera(opt String name) name was provided but there was no corresponding camera found!");
-				return 0;
-			}
-		}
-
-		Luna<Camera_BindLua>::push(L, new Camera_BindLua(wiRenderer::getCamera()));
-		return 1;
-	}
-	int GetCameras(lua_State* L)
-	{
-		stringstream ss("");
-		for (auto& m : wiRenderer::GetScene().models)
-		{
-			for (auto& x : m->cameras)
-			{
-				ss << x->name << endl;
-			}
-		}
-		wiLua::SSetString(L, ss.str());
-		return 1;
-	}
-
 	int SetResolutionScale(lua_State* L)
 	{
 		int argc = wiLua::SGetArgCount(L);
@@ -319,136 +58,43 @@ namespace wiRenderer_BindLua
 		}
 		return 0;
 	}
+	int GetGameSpeed(lua_State* L)
+	{
+		wiLua::SSetFloat(L, wiRenderer::GetGameSpeed());
+		return 1;
+	}
 
-	int LoadModel(lua_State* L)
+	int GetScreenWidth(lua_State* L)
+	{
+		wiLua::SSetFloat(L, wiRenderer::GetDevice()->GetScreenWidth());
+		return 1;
+	}
+	int GetScreenHeight(lua_State* L)
+	{
+		wiLua::SSetFloat(L, wiRenderer::GetDevice()->GetScreenHeight());
+		return 1;
+	}
+
+	int GetCamera(lua_State* L)
+	{
+		Luna<CameraComponent_BindLua>::push(L, new CameraComponent_BindLua(&wiRenderer::GetCamera()));
+		return 1;
+	}
+	int AttachCamera(lua_State* L)
 	{
 		int argc = wiLua::SGetArgCount(L);
 		if (argc > 0)
 		{
-			string fileName = wiLua::SGetString(L, 1);
-			XMMATRIX transform = XMMatrixIdentity();
-			if (argc > 1)
-			{
-				Matrix_BindLua* matrix = Luna<Matrix_BindLua>::lightcheck(L, 2);
-				if (matrix != nullptr)
-				{
-					transform = matrix->matrix;
-				}
-				else
-				{
-					wiLua::SError(L, "LoadModel(string fileName, opt Matrix transform) argument is not a matrix!");
-				}
-			}
-			Model* model = wiRenderer::LoadModel(fileName, transform);
-			Luna<Model_BindLua>::push(L, new Model_BindLua(model));
-			return 1;
+			Entity entity = (Entity)wiLua::SGetLongLong(L, 1);
+			wiRenderer::AttachCamera(entity);
 		}
 		else
 		{
-			wiLua::SError(L, "LoadModel(string fileName, opt Matrix transform) not enough arguments!");
+			wiLua::SError(L, "AttachCamera(Entity entity) not enough arguments!");
 		}
 		return 0;
 	}
-	int LoadWorldInfo(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			string fileName = wiLua::SGetString(L, 1);
-			wiRenderer::LoadWorldInfo(fileName);
-		}
-		else
-		{
-			wiLua::SError(L, "LoadWorldInfo(string fileName) not enough arguments!");
-		}
-		return 0;
-	}
-	int DuplicateInstance(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			Object_BindLua* x = Luna<Object_BindLua>::lightcheck(L, 1);
-			if (x != nullptr)
-			{
-				Object* o = new Object(*x->object);
-				wiRenderer::Add(o);
-				Luna<Object_BindLua>::push(L, new Object_BindLua(o));
-				return 1;
-			}
-			else
-			{
-				wiLua::SError(L, "DuplicateInstance(Object object) argument type mismatch!");
-			}
-		}
-		else
-		{
-			wiLua::SError(L, "DuplicateInstance(Object object) not enough arguments!");
-		}
-		return 0;
-	}
-	int SetEnvironmentMap(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			Texture_BindLua* tex = Luna<Texture_BindLua>::lightcheck(L, 1);
-			if (tex != nullptr)
-			{
-				wiRenderer::SetEnviromentMap(tex->texture);
-			}
-			else
-				wiLua::SError(L, "SetEnvironmentMap(Texture cubemap) argument is not a texture!");
-		}
-		else
-			wiLua::SError(L, "SetEnvironmentMap(Texture cubemap) not enough arguments!");
-		return 0;
-	}
-	int SetColorGrading(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			Texture_BindLua* tex = Luna<Texture_BindLua>::lightcheck(L, 1);
-			if (tex != nullptr)
-			{
-				wiRenderer::SetColorGrading(tex->texture);
-			}
-			else
-				wiLua::SError(L, "SetColorGrading(Texture texture2D) argument is not a texture!");
-		}
-		else
-			wiLua::SError(L, "SetColorGrading(Texture texture2D) not enough arguments!");
-		return 0;
-	}
-	int HairParticleSettings(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		int lod0 = 20, lod1 = 50, lod2 = 200;
-		if (argc > 0)
-		{
-			lod0 = wiLua::SGetInt(L, 1);
-			if (argc > 1)
-			{
-				lod1 = wiLua::SGetInt(L, 2);
-				if (argc > 2)
-				{
-					lod2 = wiLua::SGetInt(L, 3);
-				}
-			}
-		}
-		wiHairParticle::Settings(lod0, lod1, lod2);
-		return 0;
-	}
-	int SetAlphaCompositionEnabled(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			wiRenderer::SetAlphaCompositionEnabled(wiLua::SGetBool(L, 1));
-		}
-		return 0;
-	}
+
 	int SetShadowProps2D(lua_State* L)
 	{
 		int argc = wiLua::SGetArgCount(L);
@@ -521,23 +167,6 @@ namespace wiRenderer_BindLua
 		}
 		return 0;
 	}
-	int SetPhysicsParams(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			wiRenderer::physicsEngine->rigidBodyPhysicsEnabled = wiLua::SGetBool(L, 1);
-			if (argc > 1)
-			{
-				wiRenderer::physicsEngine->softBodyPhysicsEnabled = wiLua::SGetBool(L, 2);
-				if (argc > 2)
-				{
-					wiRenderer::physicsEngine->softBodyIterationCount = wiLua::SGetInt(L, 3);
-				}
-			}
-		}
-		return 0;
-	}
 	int SetResolution(lua_State* L)
 	{
 		int argc = wiLua::SGetArgCount(L);
@@ -578,65 +207,162 @@ namespace wiRenderer_BindLua
 		return 0;
 	}
 
-	int Pick(lua_State* L)
+	int DrawLine(lua_State* L)
+	{
+		int argc = wiLua::SGetArgCount(L);
+		if (argc > 1)
+		{
+			Vector_BindLua* a = Luna<Vector_BindLua>::lightcheck(L, 1);
+			Vector_BindLua* b = Luna<Vector_BindLua>::lightcheck(L, 2);
+			if (a && b)
+			{
+				wiRenderer::RenderableLine line;
+				XMStoreFloat3(&line.start, a->vector);
+				XMStoreFloat3(&line.end, b->vector);
+				if (argc > 2)
+				{
+					Vector_BindLua* c = Luna<Vector_BindLua>::lightcheck(L, 3);
+					if (c)
+					{
+						XMStoreFloat4(&line.color_start, c->vector);
+						XMStoreFloat4(&line.color_end, c->vector);
+					}
+					else
+						wiLua::SError(L, "DrawLine(Vector origin,end, opt Vector color) one or more arguments are not vectors!");
+				}
+				wiRenderer::DrawLine(line);
+			}
+			else
+				wiLua::SError(L, "DrawLine(Vector origin,end, opt Vector color) one or more arguments are not vectors!");
+		}
+		else
+			wiLua::SError(L, "DrawLine(Vector origin,end, opt Vector color) not enough arguments!");
+
+		return 0;
+	}
+	int DrawPoint(lua_State* L)
 	{
 		int argc = wiLua::SGetArgCount(L);
 		if (argc > 0)
 		{
-			Ray_BindLua* ray = Luna<Ray_BindLua>::lightcheck(L, 1);
-			if (ray != nullptr)
+			Vector_BindLua* a = Luna<Vector_BindLua>::lightcheck(L, 1);
+			if (a)
 			{
-				int pickType = PICKTYPE::PICK_OPAQUE;
-				uint32_t layerMask = 0xFFFFFFFF;
+				wiRenderer::RenderablePoint point;
+				XMStoreFloat3(&point.position, a->vector);
 				if (argc > 1)
 				{
-					pickType = wiLua::SGetInt(L, 2);
+					point.size = wiLua::SGetFloat(L, 2);
+
 					if (argc > 2)
 					{
-						int mask = wiLua::SGetInt(L, 3);
-						layerMask = *reinterpret_cast<uint32_t*>(&mask);
+						Vector_BindLua* color = Luna<Vector_BindLua>::lightcheck(L, 3);
+						XMStoreFloat4(&point.color, color->vector);
 					}
 				}
-				wiRenderer::Picked pick = wiRenderer::Pick(ray->ray, pickType, layerMask);
-				Luna<Object_BindLua>::push(L, new Object_BindLua(pick.object));
-				Luna<Vector_BindLua>::push(L, new Vector_BindLua(XMLoadFloat3(&pick.position)));
-				Luna<Vector_BindLua>::push(L, new Vector_BindLua(XMLoadFloat3(&pick.normal)));
-				wiLua::SSetFloat(L, pick.distance);
-				return 4;
-			}
-		}
-		return 0;
-	}
-	int DrawLine(lua_State* L)
-		{
-			int argc = wiLua::SGetArgCount(L);
-			if (argc > 1)
-			{
-				Vector_BindLua* a = Luna<Vector_BindLua>::lightcheck(L, 1);
-				Vector_BindLua* b = Luna<Vector_BindLua>::lightcheck(L, 2);
-				if (a && b)
-				{
-					XMFLOAT3 xa, xb;
-					XMFLOAT4 xc = XMFLOAT4(1, 1, 1, 1);
-					XMStoreFloat3(&xa, a->vector);
-					XMStoreFloat3(&xb, b->vector);
-					if (argc > 2)
-					{
-						Vector_BindLua* c = Luna<Vector_BindLua>::lightcheck(L, 3);
-						if (c)
-							XMStoreFloat4(&xc, c->vector);
-						else
-							wiLua::SError(L, "DrawLine(Vector origin,end, opt Vector color) one or more arguments are not vectors!");
-					}
-					wiRenderer::linesTemp.push_back(new Lines(xa, xb, xc));
-				}
-				else
-					wiLua::SError(L, "DrawLine(Vector origin,end, opt Vector color) one or more arguments are not vectors!");
+				wiRenderer::DrawPoint(point);
 			}
 			else
-				wiLua::SError(L, "DrawLine(Vector origin,end, opt Vector color) not enough arguments!");
-			return 0;
+				wiLua::SError(L, "DrawPoint(Vector origin, opt float size, opt Vector color) first argument must be a Vector type!");
 		}
+		else
+			wiLua::SError(L, "DrawPoint(Vector origin, opt float size, opt Vector color) not enough arguments!");
+
+		return 0;
+	}
+	int DrawBox(lua_State* L)
+	{
+		int argc = wiLua::SGetArgCount(L);
+		if (argc > 0)
+		{
+			Matrix_BindLua* m = Luna<Matrix_BindLua>::lightcheck(L, 1);
+			if (m)
+			{
+				XMFLOAT4X4 mat;
+				XMStoreFloat4x4(&mat, m->matrix);
+
+				if (argc > 1)
+				{
+					Vector_BindLua* color = Luna<Vector_BindLua>::lightcheck(L, 2);
+					if (color)
+					{
+						XMFLOAT4 col;
+						XMStoreFloat4(&col, color->vector);
+						wiRenderer::DrawBox(mat, col);
+						return 0;
+					}
+				}
+
+				wiRenderer::DrawBox(mat);
+			}
+			else
+				wiLua::SError(L, "DrawBox(Matrix boxMatrix, opt Vector color) first argument must be a Matrix type!");
+		}
+		else
+			wiLua::SError(L, "DrawBox(Matrix boxMatrix, opt Vector color) not enough arguments!");
+
+		return 0;
+	}
+	int DrawSphere(lua_State* L)
+	{
+		int argc = wiLua::SGetArgCount(L);
+		if (argc > 0)
+		{
+			Sphere_BindLua* sphere = Luna<Sphere_BindLua>::lightcheck(L, 1);
+			if (sphere)
+			{
+				if (argc > 1)
+				{
+					Vector_BindLua* color = Luna<Vector_BindLua>::lightcheck(L, 2);
+					if (color)
+					{
+						XMFLOAT4 col;
+						XMStoreFloat4(&col, color->vector);
+						wiRenderer::DrawSphere(sphere->sphere, col);
+						return 0;
+					}
+				}
+
+				wiRenderer::DrawSphere(sphere->sphere);
+			}
+			else
+				wiLua::SError(L, "DrawSphere(Sphere sphere, opt Vector color) first argument must be a Matrix type!");
+		}
+		else
+			wiLua::SError(L, "DrawSphere(Sphere sphere, opt Vector color) not enough arguments!");
+
+		return 0;
+	}
+	int DrawCapsule(lua_State* L)
+	{
+		int argc = wiLua::SGetArgCount(L);
+		if (argc > 0)
+		{
+			Capsule_BindLua* capsule = Luna<Capsule_BindLua>::lightcheck(L, 1);
+			if (capsule)
+			{
+				if (argc > 1)
+				{
+					Vector_BindLua* color = Luna<Vector_BindLua>::lightcheck(L, 2);
+					if (color)
+					{
+						XMFLOAT4 col;
+						XMStoreFloat4(&col, color->vector);
+						wiRenderer::DrawCapsule(capsule->capsule, col);
+						return 0;
+					}
+				}
+
+				wiRenderer::DrawCapsule(capsule->capsule);
+			}
+			else
+				wiLua::SError(L, "DrawCapsule(Capsule capsule, opt Vector color) first argument must be a Matrix type!");
+		}
+		else
+			wiLua::SError(L, "DrawCapsule(Capsule capsule, opt Vector color) not enough arguments!");
+
+		return 0;
+	}
 	int PutWaterRipple(lua_State* L)
 	{
 		int argc = wiLua::SGetArgCount(L);
@@ -658,68 +384,22 @@ namespace wiRenderer_BindLua
 		return 0;
 	}
 
-	int PutDecal(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			Decal_BindLua* decal = Luna<Decal_BindLua>::lightcheck(L, 1);
-			if (decal != nullptr)
-			{
-				wiRenderer::PutDecal(decal->decal);
-			}
-			else
-			{
-				wiLua::SError(L, "PutDecal(Decal decal) argument is not a Decal!");
-			}
-		}
-		else
-		{
-			wiLua::SError(L, "PutDecal(Decal decal) not enough arguments!");
-		}
-		return 0;
-	}
-
-	int PutEnvProbe(lua_State* L)
-	{
-		int argc = wiLua::SGetArgCount(L);
-		if (argc > 0)
-		{
-			Vector_BindLua* pos = Luna<Vector_BindLua>::lightcheck(L, 1);
-			if (pos != nullptr)
-			{
-				XMFLOAT3 p;
-				XMStoreFloat3(&p, pos->vector);
-				wiRenderer::PutEnvProbe(p);
-			}
-			else
-			{
-				wiLua::SError(L, "PutEnvProbe(Vector pos) argument is not a Vector!");
-			}
-		}
-		else
-		{
-			wiLua::SError(L, "PutEnvProbe(Vector pos) not enough arguments!");
-		}
-		return 0;
-	}
-
-
 	int ClearWorld(lua_State* L)
 	{
-		wiRenderer::ClearWorld();
+		Scene_BindLua* scene = Luna<Scene_BindLua>::lightcheck(L, 1);
+		if (scene == nullptr)
+		{
+			wiRenderer::ClearWorld(wiScene::GetScene());
+		}
+		else
+		{
+			wiRenderer::ClearWorld(*scene->scene);
+		}
 		return 0;
 	}
 	int ReloadShaders(lua_State* L)
 	{
-		if (wiLua::SGetArgCount(L) > 0)
-		{
-			wiRenderer::ReloadShaders(wiLua::SGetString(L, 1));
-		}
-		else 
-		{
-			wiRenderer::ReloadShaders();
-		}
+		wiRenderer::ReloadShaders();
 		return 0;
 	}
 
@@ -729,69 +409,46 @@ namespace wiRenderer_BindLua
 		if (!initialized)
 		{
 			initialized = true;
-			wiLua::GetGlobal()->RegisterFunc("GetTransforms", GetTransforms);
-			wiLua::GetGlobal()->RegisterFunc("GetTransform", GetTransform);
-			wiLua::GetGlobal()->RegisterFunc("GetArmatures", GetArmatures);
-			wiLua::GetGlobal()->RegisterFunc("GetArmature", GetArmature);
-			wiLua::GetGlobal()->RegisterFunc("GetObjects", GetObjects);
-			wiLua::GetGlobal()->RegisterFunc("GetObject", GetObjectLua);
-			wiLua::GetGlobal()->RegisterFunc("GetEmitters", GetEmitters);
-			wiLua::GetGlobal()->RegisterFunc("GetEmitter", GetEmitter);
-			wiLua::GetGlobal()->RegisterFunc("GetMeshes", GetMeshes);
-			wiLua::GetGlobal()->RegisterFunc("GetLights", GetLights);
-			wiLua::GetGlobal()->RegisterFunc("GetMaterials", GetMaterials);
-			wiLua::GetGlobal()->RegisterFunc("GetMaterial", GetMaterial);
-			wiLua::GetGlobal()->RegisterFunc("GetGameSpeed", GetGameSpeed);
-			wiLua::GetGlobal()->RegisterFunc("GetScreenWidth", GetScreenWidth);
-			wiLua::GetGlobal()->RegisterFunc("GetScreenHeight", GetScreenHeight);
-			wiLua::GetGlobal()->RegisterFunc("GetCamera", GetCamera);
-			wiLua::GetGlobal()->RegisterFunc("GetCameras", GetCameras);
 
-			wiLua::GetGlobal()->RegisterFunc("SetResolutionScale", SetResolutionScale);
-			wiLua::GetGlobal()->RegisterFunc("SetGamma", SetGamma);
-			wiLua::GetGlobal()->RegisterFunc("SetGameSpeed", SetGameSpeed);
+			wiLua::RegisterFunc("SetResolutionScale", SetResolutionScale);
+			wiLua::RegisterFunc("SetGamma", SetGamma);
+			wiLua::RegisterFunc("SetGameSpeed", SetGameSpeed);
+			wiLua::RegisterFunc("GetGameSpeed", GetGameSpeed);
 
-			wiLua::GetGlobal()->RegisterFunc("LoadModel", LoadModel);
-			wiLua::GetGlobal()->RegisterFunc("LoadWorldInfo", LoadWorldInfo);
-			wiLua::GetGlobal()->RegisterFunc("DuplicateInstance", DuplicateInstance);
-			wiLua::GetGlobal()->RegisterFunc("SetEnvironmentMap", SetEnvironmentMap);
-			wiLua::GetGlobal()->RegisterFunc("SetColorGrading", SetColorGrading);
-			wiLua::GetGlobal()->RegisterFunc("HairParticleSettings", HairParticleSettings);
-			wiLua::GetGlobal()->RegisterFunc("SetAlphaCompositionEnabled", SetAlphaCompositionEnabled);
-			wiLua::GetGlobal()->RegisterFunc("SetShadowProps2D", SetShadowProps2D);
-			wiLua::GetGlobal()->RegisterFunc("SetShadowPropsCube", SetShadowPropsCube);
-			wiLua::GetGlobal()->RegisterFunc("SetDebugBoxesEnabled", SetDebugBoxesEnabled);
-			wiLua::GetGlobal()->RegisterFunc("SetDebugPartitionTreeEnabled", SetDebugPartitionTreeEnabled);
-			wiLua::GetGlobal()->RegisterFunc("SetDebugBonesEnabled", SetDebugBonesEnabled);
-			wiLua::GetGlobal()->RegisterFunc("SetDebugEmittersEnabled", SetDebugEmittersEnabled);
-			wiLua::GetGlobal()->RegisterFunc("SetDebugForceFieldsEnabled", SetDebugForceFieldsEnabled);
-			wiLua::GetGlobal()->RegisterFunc("SetVSyncEnabled", SetVSyncEnabled);
-			wiLua::GetGlobal()->RegisterFunc("SetPhysicsParams", SetPhysicsParams);
-			wiLua::GetGlobal()->RegisterFunc("SetResolution", SetResolution);
-			wiLua::GetGlobal()->RegisterFunc("SetDebugLightCulling", SetDebugLightCulling);
-			wiLua::GetGlobal()->RegisterFunc("SetOcclusionCullingEnabled", SetOcclusionCullingEnabled);
+			wiLua::RegisterFunc("GetScreenWidth", GetScreenWidth);
+			wiLua::RegisterFunc("GetScreenHeight", GetScreenHeight);
 
-			wiLua::GetGlobal()->RegisterFunc("Pick", Pick);
-			wiLua::GetGlobal()->RegisterFunc("DrawLine", DrawLine);
-			wiLua::GetGlobal()->RegisterFunc("PutWaterRipple", PutWaterRipple);
-			wiLua::GetGlobal()->RegisterFunc("PutDecal", PutDecal);
-			wiLua::GetGlobal()->RegisterFunc("PutEnvProbe", PutEnvProbe);
+			wiLua::RegisterFunc("GetCamera", GetCamera);
+			wiLua::RegisterFunc("AttachCamera", AttachCamera);
+
+			wiLua::RegisterFunc("SetShadowProps2D", SetShadowProps2D);
+			wiLua::RegisterFunc("SetShadowPropsCube", SetShadowPropsCube);
+			wiLua::RegisterFunc("SetDebugBoxesEnabled", SetDebugBoxesEnabled);
+			wiLua::RegisterFunc("SetDebugPartitionTreeEnabled", SetDebugPartitionTreeEnabled);
+			wiLua::RegisterFunc("SetDebugBonesEnabled", SetDebugBonesEnabled);
+			wiLua::RegisterFunc("SetDebugEmittersEnabled", SetDebugEmittersEnabled);
+			wiLua::RegisterFunc("SetDebugForceFieldsEnabled", SetDebugForceFieldsEnabled);
+			wiLua::RegisterFunc("SetVSyncEnabled", SetVSyncEnabled);
+			wiLua::RegisterFunc("SetResolution", SetResolution);
+			wiLua::RegisterFunc("SetDebugLightCulling", SetDebugLightCulling);
+			wiLua::RegisterFunc("SetOcclusionCullingEnabled", SetOcclusionCullingEnabled);
+
+			wiLua::RegisterFunc("DrawLine", DrawLine);
+			wiLua::RegisterFunc("DrawPoint", DrawPoint);
+			wiLua::RegisterFunc("DrawBox", DrawBox);
+			wiLua::RegisterFunc("DrawSphere", DrawSphere);
+			wiLua::RegisterFunc("DrawCapsule", DrawCapsule);
+			wiLua::RegisterFunc("PutWaterRipple", PutWaterRipple);
 
 
-			wiLua::GetGlobal()->RunText("PICK_VOID = 0");
-			wiLua::GetGlobal()->RunText("PICK_OPAQUE = 1");
-			wiLua::GetGlobal()->RunText("PICK_TRANSPARENT = 2");
-			wiLua::GetGlobal()->RunText("PICK_WATER = 4");
-			wiLua::GetGlobal()->RunText("PICK_LIGHT = 8");
-			wiLua::GetGlobal()->RunText("PICK_DECAL = 16");
-			wiLua::GetGlobal()->RunText("PICK_ENVPROBE = 32");
-			wiLua::GetGlobal()->RunText("PICK_FORCEFIELD = 64");
-			wiLua::GetGlobal()->RunText("PICK_EMITTER = 128");
-			wiLua::GetGlobal()->RunText("PICK_CAMERA = 256");
+			wiLua::RunText("PICK_VOID = 0");
+			wiLua::RunText("PICK_OPAQUE = 1");
+			wiLua::RunText("PICK_TRANSPARENT = 2");
+			wiLua::RunText("PICK_WATER = 4");
 
 
-			wiLua::GetGlobal()->RegisterFunc("ClearWorld", ClearWorld);
-			wiLua::GetGlobal()->RegisterFunc("ReloadShaders", ReloadShaders);
+			wiLua::RegisterFunc("ClearWorld", ClearWorld);
+			wiLua::RegisterFunc("ReloadShaders", ReloadShaders);
 		}
 	}
 };

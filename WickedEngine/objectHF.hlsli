@@ -1,7 +1,11 @@
-#ifndef _OBJECTSHADER_HF_
-#define _OBJECTSHADER_HF_
+#ifndef WI_OBJECTSHADER_HF
+#define WI_OBJECTSHADER_HF
 
-#if defined(TILEDFORWARD) && !defined(TRANSPARENT)
+#if (defined(TILEDFORWARD) || defined(FORWARD)) && !defined(TRANSPARENT)
+#define DISABLE_ALPHATEST
+#endif
+
+#ifdef TERRAIN
 #define DISABLE_ALPHATEST
 #endif
 
@@ -9,108 +13,94 @@
 #define DISABLE_TRANSPARENT_SHADOWMAP
 #endif
 
-
 #ifdef PLANARREFLECTION
 #define DISABLE_ENVMAPS
+#define DISABLE_VOXELGI
 #endif
 
+#ifdef WATER
+#define DISABLE_VOXELGI
+#endif
+
+
+#define LIGHTMAP_QUALITY_BICUBIC
 
 
 #include "globals.hlsli"
 #include "objectInputLayoutHF.hlsli"
-#include "windHF.hlsli"
-#include "ditherHF.hlsli"
-#include "tangentComputeHF.hlsli"
-#include "depthConvertHF.hlsli"
-#include "fogHF.hlsli"
 #include "brdf.hlsli"
-#include "packHF.hlsli"
 #include "lightingHF.hlsli"
-
-// UNIFORMS
-//////////////////
-
-CBUFFER(MaterialCB, CBSLOT_RENDERER_MATERIAL)
-{
-	float4		g_xMat_baseColor;
-	float4		g_xMat_texMulAdd;
-	float		g_xMat_roughness;
-	float		g_xMat_reflectance;
-	float		g_xMat_metalness;
-	float		g_xMat_emissive;
-	float		g_xMat_refractionIndex;
-	float		g_xMat_subsurfaceScattering;
-	float		g_xMat_normalMapStrength;
-	float		g_xMat_parallaxOcclusionMapping;
-};
 
 // DEFINITIONS
 //////////////////
 
 // These are bound by wiRenderer (based on Material):
-#define xBaseColorMap			texture_0	// rgb: baseColor, a: opacity
-#define xNormalMap				texture_1	// rgb: normal, a: roughness
-#define xSurfaceMap				texture_2	// r: reflectance, g: metalness, b: emissive, a: subsurface scattering
-#define xDisplacementMap		texture_3	// r: heightmap
+TEXTURE2D(texture_basecolormap, float4, TEXSLOT_RENDERER_BASECOLORMAP);			// rgb: baseColor, a: opacity
+TEXTURE2D(texture_normalmap, float3, TEXSLOT_RENDERER_NORMALMAP);				// rgb: normal
+TEXTURE2D(texture_surfacemap, float4, TEXSLOT_RENDERER_SURFACEMAP);				// r: occlusion, g: roughness, b: metallic, a: reflectance
+TEXTURE2D(texture_emissivemap, float4, TEXSLOT_RENDERER_EMISSIVEMAP);			// rgba: emissive
+TEXTURE2D(texture_displacementmap, float, TEXSLOT_RENDERER_DISPLACEMENTMAP);	// r: heightmap
+TEXTURE2D(texture_occlusionmap, float, TEXSLOT_RENDERER_OCCLUSIONMAP);			// r: occlusion
 
-// These are bound by RenderableComponent (based on Render Path):
-#define xReflection				texture_6	// rgba: scene color from reflected camera angle
-#define xRefraction				texture_7	// rgba: scene color from primary camera angle
-#define	xWaterRipples			texture_8	// rgb: snorm8 water ripple normal map
-#define	xSSAO					texture_8	// r: screen space ambient occlusion
-#define	xSSR					texture_9	// rgb: screen space ray-traced reflections, a: reflection blend based on ray hit or miss
+TEXTURE2D(texture_blend1_basecolormap, float4, TEXSLOT_RENDERER_BLEND1_BASECOLORMAP);	// rgb: baseColor, a: opacity
+TEXTURE2D(texture_blend1_normalmap, float3, TEXSLOT_RENDERER_BLEND1_NORMALMAP);			// rgb: normal
+TEXTURE2D(texture_blend1_surfacemap, float4, TEXSLOT_RENDERER_BLEND1_SURFACEMAP);		// r: occlusion, g: roughness, b: metallic, a: reflectance
+TEXTURE2D(texture_blend1_emissivemap, float4, TEXSLOT_RENDERER_BLEND1_EMISSIVEMAP);		// rgba: emissive
+
+TEXTURE2D(texture_blend2_basecolormap, float4, TEXSLOT_RENDERER_BLEND2_BASECOLORMAP);	// rgb: baseColor, a: opacity
+TEXTURE2D(texture_blend2_normalmap, float3, TEXSLOT_RENDERER_BLEND2_NORMALMAP);			// rgb: normal
+TEXTURE2D(texture_blend2_surfacemap, float4, TEXSLOT_RENDERER_BLEND2_SURFACEMAP);		// r: occlusion, g: roughness, b: metallic, a: reflectance
+TEXTURE2D(texture_blend2_emissivemap, float4, TEXSLOT_RENDERER_BLEND2_EMISSIVEMAP);		// rgba: emissive
+
+TEXTURE2D(texture_blend3_basecolormap, float4, TEXSLOT_RENDERER_BLEND3_BASECOLORMAP);	// rgb: baseColor, a: opacity
+TEXTURE2D(texture_blend3_normalmap, float3, TEXSLOT_RENDERER_BLEND3_NORMALMAP);			// rgb: normal
+TEXTURE2D(texture_blend3_surfacemap, float4, TEXSLOT_RENDERER_BLEND3_SURFACEMAP);		// r: occlusion, g: roughness, b: metallic, a: reflectance
+TEXTURE2D(texture_blend3_emissivemap, float4, TEXSLOT_RENDERER_BLEND3_EMISSIVEMAP);		// rgba: emissive
+
+// These are bound by RenderPath (based on Render Path):
+TEXTURE2D(texture_reflection, float4, TEXSLOT_RENDERPATH_REFLECTION);		// rgba: scene color from reflected camera angle
+TEXTURE2D(texture_refraction, float4, TEXSLOT_RENDERPATH_REFRACTION);		// rgba: scene color from primary camera angle
+TEXTURE2D(texture_waterriples, float4, TEXSLOT_RENDERPATH_WATERRIPPLES);	// rgb: snorm8 water ripple normal map
+TEXTURE2D(texture_ao, float, TEXSLOT_RENDERPATH_AO);						// r: ambient occlusion
+TEXTURE2D(texture_ssr, float4, TEXSLOT_RENDERPATH_SSR);						// rgb: screen space ray-traced reflections, a: reflection blend based on ray hit or miss
 
 
 struct PixelInputType_Simple
 {
 	float4 pos								: SV_POSITION;
 	float  clip								: SV_ClipDistance0;
-	float2 tex								: TEXCOORD0;
-	nointerpolation float  dither			: DITHER;
-	nointerpolation float3 instanceColor	: INSTANCECOLOR;
+	float4 color							: COLOR;
+	float4 uvsets							: UVSETS;
 };
 struct PixelInputType
 {
 	float4 pos								: SV_POSITION;
 	float  clip								: SV_ClipDistance0;
-	float2 tex								: TEXCOORD0;
-	nointerpolation float  dither			: DITHER;
-	nointerpolation float3 instanceColor	: INSTANCECOLOR;
+	float4 color							: COLOR;
+	float4 uvsets							: UVSETS;
+	float2 atl								: ATLAS;
 	float3 nor								: NORMAL;
-	float4 pos2D							: SCREENPOSITION;
+	float4 tan								: TANGENT;
 	float3 pos3D							: WORLDPOSITION;
 	float4 pos2DPrev						: SCREENPOSITIONPREV;
-	float4 ReflectionMapSamplingPos			: TEXCOORD1;
-	float2 nor2D							: NORMAL2D;
 };
 
 struct GBUFFEROutputType
 {
 	float4 g0	: SV_Target0;		// texture_gbuffer0
 	float4 g1	: SV_Target1;		// texture_gbuffer1
-	float4 g2	: SV_Target2;		// texture_gbuffer2
-	float4 g3	: SV_Target3;		// texture_gbuffer3
+	float4 diffuse	: SV_Target2;
+	float4 specular	: SV_Target3;
 };
-inline GBUFFEROutputType CreateGbuffer(in float4 color, in Surface surface, in float2 velocity)
+inline GBUFFEROutputType CreateGbuffer(in Surface surface, in float2 velocity, in Lighting lighting)
 {
-	GBUFFEROutputType Out;
-	Out.g0 = float4(color.rgb, 1);														/*FORMAT_R8G8B8A8_UNORM*/
-	Out.g1 = float4(encode(surface.N), velocity);										/*FORMAT_R16G16B16A16_FLOAT*/
-	Out.g2 = float4(0, 0, surface.sss, surface.emissive);								/*FORMAT_R8G8B8A8_UNORM*/
-	Out.g3 = float4(surface.roughness, surface.reflectance, surface.metalness, 1);		/*FORMAT_R8G8B8A8_UNORM*/
-	return Out;
-}
+	LightingPart combined_lighting = CombineLighting(surface, lighting);
 
-struct GBUFFEROutputType_Thin
-{
-	float4 g0	: SV_Target0;		// texture_gbuffer0
-	float4 g1	: SV_Target1;		// texture_gbuffer1
-};
-inline GBUFFEROutputType_Thin CreateGbuffer_Thin(in float4 color, in Surface surface, in float2 velocity)
-{
-	GBUFFEROutputType_Thin Out;
-	Out.g0 = color;																		/*FORMAT_R16G16B16A16_FLOAT*/
-	Out.g1 = float4(encode(surface.N), velocity);										/*FORMAT_R16G16B16A16_FLOAT*/
+	GBUFFEROutputType Out;
+	Out.g0 = float4(surface.albedo, surface.roughness);		/*FORMAT_R8G8B8A8_UNORM*/
+	Out.g1 = float4(encodeNormal(surface.N), velocity);		/*FORMAT_R16G16B16A16_FLOAT*/
+	Out.diffuse = float4(combined_lighting.diffuse, 1);		/*FORMAT_R11G11B10_FLOAT*/
+	Out.specular = float4(combined_lighting.specular, 1);	/*FORMAT_R11G11B10_FLOAT*/
 	return Out;
 }
 
@@ -118,303 +108,569 @@ inline GBUFFEROutputType_Thin CreateGbuffer_Thin(in float4 color, in Surface sur
 // METHODS
 ////////////
 
-inline void NormalMapping(in float2 UV, in float3 V, inout float3 N, in float3x3 TBN, inout float3 bumpColor, inout float roughness)
+inline void ApplyEmissive(in Surface surface, inout Lighting lighting)
 {
-	float4 normal_roughness = xNormalMap.Sample(sampler_objectshader, UV);
-	bumpColor = 2.0f * normal_roughness.rgb - 1.0f;
-	N = normalize(lerp(N, mul(bumpColor, TBN), g_xMat_normalMapStrength));
-	bumpColor *= g_xMat_normalMapStrength;
-	roughness *= normal_roughness.a;
+	lighting.direct.specular += surface.emissiveColor.rgb * surface.emissiveColor.a;
 }
 
-inline void SpecularAA(in float3 N, inout float roughness)
+inline void LightMapping(in float2 ATLAS, inout Lighting lighting)
 {
 	[branch]
-	if (g_xWorld_SpecularAA > 0)
+	if (any(ATLAS))
 	{
-		float3 ddxN = ddx_coarse(N);
-		float3 ddyN = ddy_coarse(N);
-		float curve = pow(max(dot(ddxN, ddxN), dot(ddyN, ddyN)), 1 - g_xWorld_SpecularAA);
-		roughness = max(roughness, curve);
+#ifdef LIGHTMAP_QUALITY_BICUBIC
+		float4 lightmap = SampleTextureCatmullRom(texture_globallightmap, sampler_linear_clamp, ATLAS);
+#else
+		float4 lightmap = texture_globallightmap.SampleLevel(sampler_linear_clamp, ATLAS, 0);
+#endif // LIGHTMAP_QUALITY_BICUBIC
+		lighting.indirect.diffuse = lerp(lighting.indirect.diffuse, lightmap.rgb, lightmap.a);
 	}
 }
 
-inline float3 PlanarReflection(in float2 reflectionUV, in Surface surface)
+inline void NormalMapping(inout float4 uvsets, in float3 V, inout float3 N, in float3x3 TBN, out float3 bumpColor)
 {
-	return xReflection.SampleLevel(sampler_linear_clamp, reflectionUV + surface.N.xz*g_xMat_normalMapStrength, 0).rgb;
+	[branch]
+	if (g_xMaterial.normalMapStrength > 0 && g_xMaterial.uvset_normalMap >= 0)
+	{
+		const float2 UV_normalMap = g_xMaterial.uvset_normalMap == 0 ? uvsets.xy : uvsets.zw;
+		float3 normalMap = texture_normalmap.Sample(sampler_objectshader, UV_normalMap).rgb;
+		bumpColor = normalMap.rgb * 2 - 1;
+		N = normalize(lerp(N, mul(bumpColor, TBN), g_xMaterial.normalMapStrength));
+		bumpColor *= g_xMaterial.normalMapStrength;
+	}
+	else
+	{
+		bumpColor = 0;
+	}
+}
+
+inline float3 PlanarReflection(in Surface surface, in float2 bumpColor)
+{
+	float4 reflectionUV = mul(g_xCamera_ReflVP, float4(surface.P, 1));
+	reflectionUV.xy /= reflectionUV.w;
+	reflectionUV.xy = reflectionUV.xy * float2(0.5f, -0.5f) + 0.5f;
+	return texture_reflection.SampleLevel(sampler_linear_clamp, reflectionUV.xy + bumpColor*g_xMaterial.normalMapStrength, 0).rgb;
 }
 
 #define NUM_PARALLAX_OCCLUSION_STEPS 32
-inline void ParallaxOcclusionMapping(inout float2 UV, in float3 V, in float3x3 TBN)
+inline void ParallaxOcclusionMapping(inout float4 uvsets, in float3 V, in float3x3 TBN)
 {
-	V = mul(TBN, V);
-	float layerHeight = 1.0 / NUM_PARALLAX_OCCLUSION_STEPS;
-	float curLayerHeight = 0;
-	float2 dtex = g_xMat_parallaxOcclusionMapping * V.xy / NUM_PARALLAX_OCCLUSION_STEPS;
-	float2 currentTextureCoords = UV;
-	float2 derivX = ddx_coarse(UV);
-	float2 derivY = ddy_coarse(UV);
-	float heightFromTexture = 1 - xDisplacementMap.SampleGrad(sampler_linear_wrap, currentTextureCoords, derivX, derivY).r;
-	uint iter = 0;
-	[loop]
-	while (heightFromTexture > curLayerHeight && iter < NUM_PARALLAX_OCCLUSION_STEPS)
+	[branch]
+	if (g_xMaterial.parallaxOcclusionMapping > 0)
 	{
-		curLayerHeight += layerHeight;
-		currentTextureCoords -= dtex;
-		heightFromTexture = 1 - xDisplacementMap.SampleGrad(sampler_linear_wrap, currentTextureCoords, derivX, derivY).r;
-		iter++;
-	}
-	float2 prevTCoords = currentTextureCoords + dtex;
-	float nextH = heightFromTexture - curLayerHeight;
-	float prevH = 1 - xDisplacementMap.SampleGrad(sampler_linear_wrap, prevTCoords, derivX, derivY).r - curLayerHeight + layerHeight;
-	float weight = nextH / (nextH - prevH);
-	float2 finalTexCoords = prevTCoords * weight + currentTextureCoords * (1.0 - weight);
-	UV = finalTexCoords;
-}
-
-inline void Refraction(in float2 ScreenCoord, in float2 normal2D, in float3 bumpColor, inout Surface surface, inout float4 color)
-{
-	float2 size;
-	float mipLevels;
-	xRefraction.GetDimensions(0, size.x, size.y, mipLevels);
-	float2 perturbatedRefrTexCoords = ScreenCoord.xy + (normal2D + bumpColor.rg) * g_xMat_refractionIndex;
-	float4 refractiveColor = xRefraction.SampleLevel(sampler_linear_clamp, perturbatedRefrTexCoords, (g_xWorld_AdvancedRefractions ? surface.roughness * mipLevels : 0));
-	surface.albedo.rgb *= lerp(refractiveColor.rgb, 1, color.a);
-	color.a = 1;
-}
-
-
-inline void ForwardLighting(inout Surface surface, inout float3 diffuse, out float3 specular, out float3 reflection)
-{
-	specular = 0;
-	diffuse = 0;
-	reflection = 0;
-
-	specular += surface.baseColor.rgb * GetEmissive(surface.emissive);
-
-#ifndef DISABLE_ENVMAPS
-	float envMapMIP = surface.roughness * g_xWorld_EnvProbeMipCount;
-	reflection = max(0, EnvironmentReflection_Global(surface, envMapMIP));
-#endif // DISABLE_ENVMAPS
-
-	[loop]
-	for (uint iterator = 0; iterator < g_xFrame_LightArrayCount; iterator++)
-	{
-		ShaderEntityType light = EntityArray[g_xFrame_LightArrayOffset + iterator];
-
-		LightingResult result = (LightingResult)0;
-
-		switch (light.type)
+		V = mul(TBN, V);
+		float layerHeight = 1.0 / NUM_PARALLAX_OCCLUSION_STEPS;
+		float curLayerHeight = 0;
+		float2 dtex = g_xMaterial.parallaxOcclusionMapping * V.xy / NUM_PARALLAX_OCCLUSION_STEPS;
+		float2 originalTextureCoords = g_xMaterial.uvset_displacementMap == 0 ? uvsets.xy : uvsets.zw;
+		float2 currentTextureCoords = originalTextureCoords;
+		float2 derivX = ddx_coarse(currentTextureCoords);
+		float2 derivY = ddy_coarse(currentTextureCoords);
+		float heightFromTexture = 1 - texture_displacementmap.SampleGrad(sampler_linear_wrap, currentTextureCoords, derivX, derivY).r;
+		uint iter = 0;
+		[loop]
+		while (heightFromTexture > curLayerHeight && iter < NUM_PARALLAX_OCCLUSION_STEPS)
 		{
-		case ENTITY_TYPE_DIRECTIONALLIGHT:
-		{
-			result = DirectionalLight(light, surface);
+			curLayerHeight += layerHeight;
+			currentTextureCoords -= dtex;
+			heightFromTexture = 1 - texture_displacementmap.SampleGrad(sampler_linear_wrap, currentTextureCoords, derivX, derivY).r;
+			iter++;
 		}
-		break;
-		case ENTITY_TYPE_POINTLIGHT:
-		{
-			result = PointLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_SPOTLIGHT:
-		{
-			result = SpotLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_SPHERELIGHT:
-		{
-			result = SphereLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_DISCLIGHT:
-		{
-			result = DiscLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_RECTANGLELIGHT:
-		{
-			result = RectangleLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_TUBELIGHT:
-		{
-			result = TubeLight(light, surface);
-		}
-		break;
-		}
-
-		diffuse += max(0.0f, result.diffuse);
-		specular += max(0.0f, result.specular);
+		float2 prevTCoords = currentTextureCoords + dtex;
+		float nextH = heightFromTexture - curLayerHeight;
+		float prevH = 1 - texture_displacementmap.SampleGrad(sampler_linear_wrap, prevTCoords, derivX, derivY).r - curLayerHeight + layerHeight;
+		float weight = nextH / (nextH - prevH);
+		float2 finalTextureCoords = prevTCoords * weight + currentTextureCoords * (1.0 - weight);
+		float2 difference = finalTextureCoords - originalTextureCoords;
+		uvsets += difference.xyxy;
 	}
 }
 
-
-inline void TiledLighting(in float2 pixel, inout Surface surface, inout float3 diffuse, out float3 specular, out float3 reflection)
+inline void Refraction(in float2 ScreenCoord, inout Surface surface, inout float4 color, inout Lighting lighting)
 {
-	uint2 tileIndex = uint2(floor(pixel / TILED_CULLING_BLOCKSIZE));
-	uint startOffset = flatten2D(tileIndex, g_xWorld_EntityCullingTileCount.xy) * MAX_SHADER_ENTITY_COUNT_PER_TILE;
-	uint arrayProperties = EntityIndexList[startOffset];
-	uint arrayLength = arrayProperties & 0x000FFFFF; // count of every element in the tile
-	uint decalCount = (arrayProperties & 0xFF000000) >> 24; // count of just the decals in the tile
-	uint envmapCount = (arrayProperties & 0x00F00000) >> 20; // count of just the envmaps in the tile
-	startOffset += 1; // first element was the itemcount
-	uint iterator = 0;
-
-	specular = 0;
-	diffuse = 0;
-	reflection = 0;
-
-	specular += surface.baseColor.rgb * GetEmissive(surface.emissive);
-
-#ifdef DISABLE_DECALS
-	// decals are disabled, set the iterator to skip decals:
-	iterator = decalCount;
-#else
-	// decals are enabled, loop through them first:
-	float4 decalAccumulation = 0;
-	float3 P_dx = ddx_coarse(surface.P);
-	float3 P_dy = ddy_coarse(surface.P);
-
-	[loop]
-	for (; iterator < decalCount; ++iterator)
+	[branch]
+	if (g_xMaterial.refractionIndex > 0)
 	{
-		ShaderEntityType decal = EntityArray[EntityIndexList[startOffset + iterator]];
-
-		float4x4 decalProjection = MatrixArray[decal.additionalData_index];
-		float3 clipSpacePos = mul(float4(surface.P, 1), decalProjection).xyz;
-		float3 uvw = clipSpacePos.xyz*float3(0.5f, -0.5f, 0.5f) + 0.5f;
-		[branch]
-		if (!any(uvw - saturate(uvw)))
-		{
-			// mipmapping needs to be performed by hand:
-			float2 decalDX = mul(P_dx, (float3x3)decalProjection).xy * decal.texMulAdd.xy;
-			float2 decalDY = mul(P_dy, (float3x3)decalProjection).xy * decal.texMulAdd.xy;
-			float4 decalColor = texture_decalatlas.SampleGrad(sampler_objectshader, uvw.xy*decal.texMulAdd.xy + decal.texMulAdd.zw, decalDX, decalDY);
-			// blend out if close to cube Z:
-			float edgeBlend = 1 - pow(saturate(abs(clipSpacePos.z)), 8);
-			decalColor.a *= edgeBlend;
-			decalColor *= decal.GetColor();
-			// apply emissive:
-			specular += max(0, decalColor.rgb * decal.GetEmissive() * edgeBlend);
-			// perform manual blending of decals:
-			//  NOTE: they are sorted top-to-bottom, but blending is performed bottom-to-top
-			decalAccumulation.rgb = (1 - decalAccumulation.a) * (decalColor.a*decalColor.rgb) + decalAccumulation.rgb;
-			decalAccumulation.a = decalColor.a + (1 - decalColor.a) * decalAccumulation.a;
-			// if the accumulation reached 1, we skip the rest of the decals:
-			iterator = decalAccumulation.a < 1 ? iterator : decalCount - 1;
-		}
+		float2 size;
+		float mipLevels;
+		texture_refraction.GetDimensions(0, size.x, size.y, mipLevels);
+		const float2 normal2D = mul((float3x3)g_xCamera_View, surface.N.xyz).xy;
+		float2 perturbatedRefrTexCoords = ScreenCoord.xy + normal2D * g_xMaterial.refractionIndex;
+		float4 refractiveColor = texture_refraction.SampleLevel(sampler_linear_clamp, perturbatedRefrTexCoords, surface.roughness * mipLevels);
+		surface.refraction = float4(refractiveColor.rgb, 1 - color.a);
+		color.a = 1;
 	}
+}
 
-	surface.albedo.rgb = lerp(surface.albedo.rgb, decalAccumulation.rgb, decalAccumulation.a);
+inline void ForwardLighting(inout Surface surface, inout Lighting lighting)
+{
+#ifndef DISABLE_DECALS
+	[branch]
+	if (xForwardDecalMask != 0)
+	{
+		// decals are enabled, loop through them first:
+		float4 decalAccumulation = 0;
+		const float3 P_dx = ddx_coarse(surface.P);
+		const float3 P_dy = ddy_coarse(surface.P);
+
+		uint bucket_bits = xForwardDecalMask;
+
+		[loop]
+		while (bucket_bits != 0)
+		{
+			// Retrieve global entity index from local bucket, then remove bit from local bucket:
+			const uint bucket_bit_index = firstbitlow(bucket_bits);
+			const uint entity_index = bucket_bit_index;
+			bucket_bits ^= 1 << bucket_bit_index;
+
+			[branch]
+			if (decalAccumulation.a < 1)
+			{
+				ShaderEntity decal = EntityArray[g_xFrame_DecalArrayOffset + entity_index];
+
+				const float4x4 decalProjection = MatrixArray[decal.userdata];
+				const float3 clipSpacePos = mul(decalProjection, float4(surface.P, 1)).xyz;
+				const float3 uvw = clipSpacePos.xyz*float3(0.5f, -0.5f, 0.5f) + 0.5f;
+				[branch]
+				if (is_saturated(uvw))
+				{
+					// mipmapping needs to be performed by hand:
+					const float2 decalDX = mul(P_dx, (float3x3)decalProjection).xy * decal.texMulAdd.xy;
+					const float2 decalDY = mul(P_dy, (float3x3)decalProjection).xy * decal.texMulAdd.xy;
+					float4 decalColor = texture_decalatlas.SampleGrad(sampler_linear_clamp, uvw.xy*decal.texMulAdd.xy + decal.texMulAdd.zw, decalDX, decalDY);
+					// blend out if close to cube Z:
+					float edgeBlend = 1 - pow(saturate(abs(clipSpacePos.z)), 8);
+					decalColor.a *= edgeBlend;
+					decalColor *= decal.GetColor();
+					// apply emissive:
+					lighting.direct.specular += max(0, decalColor.rgb * decal.GetEmissive() * edgeBlend);
+					// perform manual blending of decals:
+					//  NOTE: they are sorted top-to-bottom, but blending is performed bottom-to-top
+					decalAccumulation.rgb = (1 - decalAccumulation.a) * (decalColor.a*decalColor.rgb) + decalAccumulation.rgb;
+					decalAccumulation.a = decalColor.a + (1 - decalColor.a) * decalAccumulation.a;
+					[branch]
+					if (decalAccumulation.a >= 1.0)
+					{
+						// force exit:
+						break;
+					}
+				}
+			}
+			else
+			{
+				// force exit:
+				break;
+			}
+
+		}
+
+		surface.albedo.rgb = lerp(surface.albedo.rgb, decalAccumulation.rgb, decalAccumulation.a);
+	}
 #endif // DISABLE_DECALS
 
 
 #ifndef DISABLE_ENVMAPS
 	// Apply environment maps:
-
 	float4 envmapAccumulation = 0;
-	float envMapMIP = surface.roughness * g_xWorld_EnvProbeMipCount;
+	const float envMapMIP = surface.roughness * g_xFrame_EnvProbeMipCount;
 
-#ifdef DISABLE_LOCALENVPMAPS
-	// local envmaps are disabled, set iterator to skip:
-	iterator += envmapCount;
-#else
-	// local envmaps are enabled, loop through them and apply:
-	uint envmapArrayEnd = iterator + envmapCount;
-
-	[loop]
-	for (; iterator < envmapArrayEnd; ++iterator)
+#ifndef ENVMAPRENDERING
+#ifndef DISABLE_LOCALENVPMAPS
+	[branch]
+	if (xForwardEnvProbeMask != 0)
 	{
-		ShaderEntityType probe = EntityArray[EntityIndexList[startOffset + iterator]];
+		uint bucket_bits = xForwardEnvProbeMask;
 
-		float4x4 probeProjection = MatrixArray[probe.additionalData_index];
-		float3 clipSpacePos = mul(float4(surface.P, 1), probeProjection).xyz;
-		float3 uvw = clipSpacePos.xyz*float3(0.5f, -0.5f, 0.5f) + 0.5f;
-		[branch]
-		if (!any(uvw - saturate(uvw)))
+		[loop]
+		while (bucket_bits != 0)
 		{
-			float4 envmapColor = EnvironmentReflection_Local(surface, probe, probeProjection, clipSpacePos, envMapMIP);
-			// perform manual blending of probes:
-			//  NOTE: they are sorted top-to-bottom, but blending is performed bottom-to-top
-			envmapAccumulation.rgb = (1 - envmapAccumulation.a) * (envmapColor.a * envmapColor.rgb) + envmapAccumulation.rgb;
-			envmapAccumulation.a = envmapColor.a + (1 - envmapColor.a) * envmapAccumulation.a;
-			// if the accumulation reached 1, we skip the rest of the probes:
-			iterator = envmapAccumulation.a < 1 ? iterator : envmapArrayEnd - 1;
+			// Retrieve global entity index from local bucket, then remove bit from local bucket:
+			const uint bucket_bit_index = firstbitlow(bucket_bits);
+			const uint entity_index = bucket_bit_index;
+			bucket_bits ^= 1 << bucket_bit_index;
+
+			[branch]
+			if (envmapAccumulation.a < 1)
+			{
+				ShaderEntity probe = EntityArray[g_xFrame_EnvProbeArrayOffset + entity_index];
+
+				const float4x4 probeProjection = MatrixArray[probe.userdata];
+				const float3 clipSpacePos = mul(probeProjection, float4(surface.P, 1)).xyz;
+				const float3 uvw = clipSpacePos.xyz*float3(0.5f, -0.5f, 0.5f) + 0.5f;
+				[branch]
+				if (is_saturated(uvw))
+				{
+					const float4 envmapColor = EnvironmentReflection_Local(surface, probe, probeProjection, clipSpacePos, envMapMIP);
+					// perform manual blending of probes:
+					//  NOTE: they are sorted top-to-bottom, but blending is performed bottom-to-top
+					envmapAccumulation.rgb = (1 - envmapAccumulation.a) * (envmapColor.a * envmapColor.rgb) + envmapAccumulation.rgb;
+					envmapAccumulation.a = envmapColor.a + (1 - envmapColor.a) * envmapAccumulation.a;
+					[branch]
+					if (envmapAccumulation.a >= 1.0)
+					{
+						// force exit:
+						break;
+					}
+				}
+			}
+			else
+			{
+				// force exit:
+				break;
+			}
+
 		}
 	}
 #endif // DISABLE_LOCALENVPMAPS
+#endif //ENVMAPRENDERING
 
 	// Apply global envmap where there is no local envmap information:
+	[branch]
 	if (envmapAccumulation.a < 0.99f)
 	{
 		envmapAccumulation.rgb = lerp(EnvironmentReflection_Global(surface, envMapMIP), envmapAccumulation.rgb, envmapAccumulation.a);
 	}
-
-	reflection = max(0, envmapAccumulation.rgb);
-
+	lighting.indirect.specular += max(0, envmapAccumulation.rgb);
 #endif // DISABLE_ENVMAPS
 
+#ifndef DISABLE_VOXELGI
+	VoxelGI(surface, lighting);
+#endif //DISABLE_VOXELGI
 
-	// And finally loop through and apply lights:
-	[loop]
-	for (; iterator < arrayLength; iterator++)
+	[branch]
+	if (any(xForwardLightMask))
 	{
-		ShaderEntityType light = EntityArray[EntityIndexList[startOffset + iterator]];
+		// Loop through light buckets for the draw call:
+		const uint first_item = 0;
+		const uint last_item = first_item + g_xFrame_LightArrayCount - 1;
+		const uint first_bucket = first_item / 32;
+		const uint last_bucket = min(last_item / 32, 1); // only 2 buckets max (uint2) for forward pass!
+		[loop]
+		for (uint bucket = first_bucket; bucket <= last_bucket; ++bucket)
+		{
+			uint bucket_bits = xForwardLightMask[bucket];
 
-		LightingResult result = (LightingResult)0;
+			[loop]
+			while (bucket_bits != 0)
+			{
+				// Retrieve global entity index from local bucket, then remove bit from local bucket:
+				const uint bucket_bit_index = firstbitlow(bucket_bits);
+				const uint entity_index = bucket * 32 + bucket_bit_index;
+				bucket_bits ^= 1 << bucket_bit_index;
 
-		switch (light.type)
-		{
-		case ENTITY_TYPE_DIRECTIONALLIGHT:
-		{
-			result = DirectionalLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_POINTLIGHT:
-		{
-			result = PointLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_SPOTLIGHT:
-		{
-			result = SpotLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_SPHERELIGHT:
-		{
-			result = SphereLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_DISCLIGHT:
-		{
-			result = DiscLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_RECTANGLELIGHT:
-		{
-			result = RectangleLight(light, surface);
-		}
-		break;
-		case ENTITY_TYPE_TUBELIGHT:
-		{
-			result = TubeLight(light, surface);
-		}
-		break;
-		}
+				ShaderEntity light = EntityArray[g_xFrame_LightArrayOffset + entity_index];
 
-		diffuse += max(0.0f, result.diffuse);
-		specular += max(0.0f, result.specular);
+				if (light.GetFlags() & ENTITY_FLAG_LIGHT_STATIC)
+				{
+					continue; // static lights will be skipped (they are used in lightmap baking)
+				}
+
+				switch (light.GetType())
+				{
+				case ENTITY_TYPE_DIRECTIONALLIGHT:
+				{
+					DirectionalLight(light, surface, lighting);
+				}
+				break;
+				case ENTITY_TYPE_POINTLIGHT:
+				{
+					PointLight(light, surface, lighting);
+				}
+				break;
+				case ENTITY_TYPE_SPOTLIGHT:
+				{
+					SpotLight(light, surface, lighting);
+				}
+				break;
+				case ENTITY_TYPE_SPHERELIGHT:
+				{
+					SphereLight(light, surface, lighting);
+				}
+				break;
+				case ENTITY_TYPE_DISCLIGHT:
+				{
+					DiscLight(light, surface, lighting);
+				}
+				break;
+				case ENTITY_TYPE_RECTANGLELIGHT:
+				{
+					RectangleLight(light, surface, lighting);
+				}
+				break;
+				case ENTITY_TYPE_TUBELIGHT:
+				{
+					TubeLight(light, surface, lighting);
+				}
+				break;
+				}
+			}
+		}
 	}
+
 }
 
-inline void ApplyLighting(in Surface surface, in float3 diffuse, in float3 specular, in float ao, inout float4 color)
+inline void TiledLighting(inout Surface surface, inout Lighting lighting)
 {
-	color.rgb = (GetAmbientColor() * ao + diffuse) * surface.albedo + specular;
+	const uint2 tileIndex = uint2(floor(surface.pixel / TILED_CULLING_BLOCKSIZE));
+	const uint flatTileIndex = flatten2D(tileIndex, g_xFrame_EntityCullingTileCount.xy) * SHADER_ENTITY_TILE_BUCKET_COUNT;
+
+
+#ifndef DISABLE_DECALS
+	[branch]
+	if (g_xFrame_DecalArrayCount > 0)
+	{
+		// decals are enabled, loop through them first:
+		float4 decalAccumulation = 0;
+		const float3 P_dx = ddx_coarse(surface.P);
+		const float3 P_dy = ddy_coarse(surface.P);
+
+		// Loop through decal buckets in the tile:
+		const uint first_item = g_xFrame_DecalArrayOffset;
+		const uint last_item = first_item + g_xFrame_DecalArrayCount - 1;
+		const uint first_bucket = first_item / 32;
+		const uint last_bucket = min(last_item / 32, max(0, SHADER_ENTITY_TILE_BUCKET_COUNT - 1));
+		[loop]
+		for (uint bucket = first_bucket; bucket <= last_bucket; ++bucket)
+		{
+			uint bucket_bits = EntityTiles[flatTileIndex + bucket];
+
+			// This is the wave scalarizer from Improved Culling - Siggraph 2017 [Drobot]:
+			bucket_bits = WaveReadLaneFirst(WaveActiveBitOr(bucket_bits));
+
+			[loop]
+			while (bucket_bits != 0)
+			{
+				// Retrieve global entity index from local bucket, then remove bit from local bucket:
+				const uint bucket_bit_index = firstbitlow(bucket_bits);
+				const uint entity_index = bucket * 32 + bucket_bit_index;
+				bucket_bits ^= 1 << bucket_bit_index;
+
+				[branch]
+				if (entity_index >= first_item && entity_index <= last_item && decalAccumulation.a < 1)
+				{
+					ShaderEntity decal = EntityArray[entity_index];
+
+					const float4x4 decalProjection = MatrixArray[decal.userdata];
+					const float3 clipSpacePos = mul(decalProjection, float4(surface.P, 1)).xyz;
+					const float3 uvw = clipSpacePos.xyz*float3(0.5f, -0.5f, 0.5f) + 0.5f;
+					[branch]
+					if (is_saturated(uvw))
+					{
+						// mipmapping needs to be performed by hand:
+						const float2 decalDX = mul(P_dx, (float3x3)decalProjection).xy * decal.texMulAdd.xy;
+						const float2 decalDY = mul(P_dy, (float3x3)decalProjection).xy * decal.texMulAdd.xy;
+						float4 decalColor = texture_decalatlas.SampleGrad(sampler_linear_clamp, uvw.xy*decal.texMulAdd.xy + decal.texMulAdd.zw, decalDX, decalDY);
+						// blend out if close to cube Z:
+						float edgeBlend = 1 - pow(saturate(abs(clipSpacePos.z)), 8);
+						decalColor.a *= edgeBlend;
+						decalColor *= decal.GetColor();
+						// apply emissive:
+						lighting.direct.specular += max(0, decalColor.rgb * decal.GetEmissive() * edgeBlend);
+						// perform manual blending of decals:
+						//  NOTE: they are sorted top-to-bottom, but blending is performed bottom-to-top
+						decalAccumulation.rgb = (1 - decalAccumulation.a) * (decalColor.a*decalColor.rgb) + decalAccumulation.rgb;
+						decalAccumulation.a = decalColor.a + (1 - decalColor.a) * decalAccumulation.a;
+						[branch]
+						if (decalAccumulation.a >= 1.0)
+						{
+							// force exit:
+							bucket = SHADER_ENTITY_TILE_BUCKET_COUNT;
+							break;
+						}
+					}
+				}
+				else if (entity_index > last_item)
+				{
+					// force exit:
+					bucket = SHADER_ENTITY_TILE_BUCKET_COUNT;
+					break;
+				}
+
+			}
+		}
+
+		surface.albedo.rgb = lerp(surface.albedo.rgb, decalAccumulation.rgb, decalAccumulation.a);
+	}
+#endif // DISABLE_DECALS
+
+
+#ifndef DISABLE_ENVMAPS
+	// Apply environment maps:
+	float4 envmapAccumulation = 0;
+	const float envMapMIP = surface.roughness * g_xFrame_EnvProbeMipCount;
+
+#ifndef DISABLE_LOCALENVPMAPS
+	[branch]
+	if (g_xFrame_EnvProbeArrayCount > 0)
+	{
+		// Loop through envmap buckets in the tile:
+		const uint first_item = g_xFrame_EnvProbeArrayOffset;
+		const uint last_item = first_item + g_xFrame_EnvProbeArrayCount - 1;
+		const uint first_bucket = first_item / 32;
+		const uint last_bucket = min(last_item / 32, max(0, SHADER_ENTITY_TILE_BUCKET_COUNT - 1));
+		[loop]
+		for (uint bucket = first_bucket; bucket <= last_bucket; ++bucket)
+		{
+			uint bucket_bits = EntityTiles[flatTileIndex + bucket];
+
+			// Bucket scalarizer - Siggraph 2017 - Improved Culling [Michal Drobot]:
+			bucket_bits = WaveReadLaneFirst(WaveActiveBitOr(bucket_bits));
+
+			[loop]
+			while (bucket_bits != 0)
+			{
+				// Retrieve global entity index from local bucket, then remove bit from local bucket:
+				const uint bucket_bit_index = firstbitlow(bucket_bits);
+				const uint entity_index = bucket * 32 + bucket_bit_index;
+				bucket_bits ^= 1 << bucket_bit_index;
+
+				[branch]
+				if (entity_index >= first_item && entity_index <= last_item && envmapAccumulation.a < 1)
+				{
+					ShaderEntity probe = EntityArray[entity_index];
+
+					const float4x4 probeProjection = MatrixArray[probe.userdata];
+					const float3 clipSpacePos = mul(probeProjection, float4(surface.P, 1)).xyz;
+					const float3 uvw = clipSpacePos.xyz*float3(0.5f, -0.5f, 0.5f) + 0.5f;
+					[branch]
+					if (is_saturated(uvw))
+					{
+						const float4 envmapColor = EnvironmentReflection_Local(surface, probe, probeProjection, clipSpacePos, envMapMIP);
+						// perform manual blending of probes:
+						//  NOTE: they are sorted top-to-bottom, but blending is performed bottom-to-top
+						envmapAccumulation.rgb = (1 - envmapAccumulation.a) * (envmapColor.a * envmapColor.rgb) + envmapAccumulation.rgb;
+						envmapAccumulation.a = envmapColor.a + (1 - envmapColor.a) * envmapAccumulation.a;
+						[branch]
+						if (envmapAccumulation.a >= 1.0)
+						{
+							// force exit:
+							bucket = SHADER_ENTITY_TILE_BUCKET_COUNT;
+							break;
+						}
+					}
+				}
+				else if (entity_index > last_item)
+				{
+					// force exit:
+					bucket = SHADER_ENTITY_TILE_BUCKET_COUNT;
+					break;
+				}
+
+			}
+		}
+	}
+#endif // DISABLE_LOCALENVPMAPS
+	
+	// Apply global envmap where there is no local envmap information:
+	[branch]
+	if (envmapAccumulation.a < 0.99f)
+	{
+		envmapAccumulation.rgb = lerp(EnvironmentReflection_Global(surface, envMapMIP), envmapAccumulation.rgb, envmapAccumulation.a);
+	}
+	lighting.indirect.specular += max(0, envmapAccumulation.rgb);
+#endif // DISABLE_ENVMAPS
+
+#ifndef DISABLE_VOXELGI
+	VoxelGI(surface, lighting);
+#endif //DISABLE_VOXELGI
+
+	[branch]
+	if (g_xFrame_LightArrayCount > 0)
+	{
+		// Loop through light buckets in the tile:
+		const uint first_item = g_xFrame_LightArrayOffset;
+		const uint last_item = first_item + g_xFrame_LightArrayCount - 1;
+		const uint first_bucket = first_item / 32;
+		const uint last_bucket = min(last_item / 32, max(0, SHADER_ENTITY_TILE_BUCKET_COUNT - 1));
+		[loop]
+		for (uint bucket = first_bucket; bucket <= last_bucket; ++bucket)
+		{
+			uint bucket_bits = EntityTiles[flatTileIndex + bucket];
+
+			// Bucket scalarizer - Siggraph 2017 - Improved Culling [Michal Drobot]:
+			bucket_bits = WaveReadLaneFirst(WaveActiveBitOr(bucket_bits));
+
+			[loop]
+			while (bucket_bits != 0)
+			{
+				// Retrieve global entity index from local bucket, then remove bit from local bucket:
+				const uint bucket_bit_index = firstbitlow(bucket_bits);
+				const uint entity_index = bucket * 32 + bucket_bit_index;
+				bucket_bits ^= 1 << bucket_bit_index;
+
+				// Check if it is a light and process:
+				[branch]
+				if (entity_index >= first_item && entity_index <= last_item)
+				{
+					ShaderEntity light = EntityArray[entity_index];
+
+					if (light.GetFlags() & ENTITY_FLAG_LIGHT_STATIC)
+					{
+						continue; // static lights will be skipped (they are used in lightmap baking)
+					}
+
+					switch (light.GetType())
+					{
+					case ENTITY_TYPE_DIRECTIONALLIGHT:
+					{
+						DirectionalLight(light, surface, lighting);
+					}
+					break;
+					case ENTITY_TYPE_POINTLIGHT:
+					{
+						PointLight(light, surface, lighting);
+					}
+					break;
+					case ENTITY_TYPE_SPOTLIGHT:
+					{
+						SpotLight(light, surface, lighting);
+					}
+					break;
+					case ENTITY_TYPE_SPHERELIGHT:
+					{
+						SphereLight(light, surface, lighting);
+					}
+					break;
+					case ENTITY_TYPE_DISCLIGHT:
+					{
+						DiscLight(light, surface, lighting);
+					}
+					break;
+					case ENTITY_TYPE_RECTANGLELIGHT:
+					{
+						RectangleLight(light, surface, lighting);
+					}
+					break;
+					case ENTITY_TYPE_TUBELIGHT:
+					{
+						TubeLight(light, surface, lighting);
+					}
+					break;
+					}
+				}
+				else if (entity_index > last_item)
+				{
+					// force exit:
+					bucket = SHADER_ENTITY_TILE_BUCKET_COUNT;
+					break;
+				}
+
+			}
+		}
+	}
+
+}
+
+inline void ApplyLighting(in Surface surface, in Lighting lighting, inout float4 color)
+{
+	LightingPart combined_lighting = CombineLighting(surface, lighting);
+	color.rgb = lerp(surface.albedo * combined_lighting.diffuse, surface.refraction.rgb, surface.refraction.a) + combined_lighting.specular;
 }
 
 inline void ApplyFog(in float dist, inout float4 color)
 {
-	color.rgb = lerp(color.rgb, GetHorizonColor(), GetFog(dist));
+	float3 V = g_xFrame_Options & OPTION_BIT_REALISTIC_SKY ? float3(0.0, 1.0, 0.0) : float3(0.0, -1.0, 0.0);	
+	color.rgb = lerp(color.rgb, GetDynamicSkyColor(V, false, false, false, true), GetFogAmount(dist));
 }
 
 
@@ -426,16 +682,13 @@ inline void ApplyFog(in float dist, inout float4 color)
 // Possible switches:
 //	ALPHATESTONLY		-	assemble object shader for depth only rendering + alpha test
 //	TEXTUREONLY			-	assemble object shader for rendering only with base textures, no lighting
-//	DEFERRED			-	assemble object shader for deferred rendering
-//	FORWARD				-	assemble object shader for forward rendering
-//	TILEDFORWARD		-	assemble object shader for tiled forward rendering
 //	TRANSPARENT			-	assemble object shader for forward or tile forward transparent rendering
 //	ENVMAPRENDERING		-	modify object shader for envmap rendering
-//	NORMALMAP			-	include normal mapping computation
 //	PLANARREFLECTION	-	include planar reflection sampling
 //	POM					-	include parallax occlusion mapping computation
 //	WATER				-	include specialized water shader code
 //	BLACKOUT			-	include specialized blackout shader code
+//	TERRAIN				-	include specialized terrain material blending code
 
 #if defined(ALPHATESTONLY) || defined(TEXTUREONLY)
 #define SIMPLE_INPUT
@@ -457,13 +710,9 @@ float4 main(PIXELINPUT input) : SV_TARGET
 float4 main(PIXELINPUT input) : SV_TARGET
 #elif defined(ENVMAPRENDERING)
 float4 main(PSIn_EnvmapRendering input) : SV_TARGET
-#elif defined(DEFERRED)
-GBUFFEROutputType main(PIXELINPUT input)
-#elif defined(FORWARD)
-GBUFFEROutputType_Thin main(PIXELINPUT input)
-#elif defined(TILEDFORWARD)
+#else
 [earlydepthstencil]
-GBUFFEROutputType_Thin main(PIXELINPUT input)
+GBUFFEROutputType main(PIXELINPUT input)
 #endif // ALPHATESTONLY
 
 
@@ -471,15 +720,16 @@ GBUFFEROutputType_Thin main(PIXELINPUT input)
 // shader base:
 {
 	float2 pixel = input.pos.xy;
+	float2 ScreenCoord = pixel * g_xFrame_InternalResolution_rcp;
 
-#if !(defined(TILEDFORWARD) && !defined(TRANSPARENT)) && !defined(ENVMAPRENDERING)
+#ifndef DISABLE_ALPHATEST
+#ifndef TRANSPARENT
+#ifndef ENVMAPRENDERING
 	// apply dithering:
-	clip(dither(pixel + GetTemporalAASampleRotation()) - input.dither);
-#endif
-
-
-
-	float2 UV = input.tex * g_xMat_texMulAdd.xy + g_xMat_texMulAdd.zw;
+	clip(dither(pixel + GetTemporalAASampleRotation()) - (1 - input.color.a));
+#endif // DISABLE_ALPHATEST
+#endif // TRANSPARENT
+#endif // ENVMAPRENDERING
 
 	Surface surface;
 
@@ -490,55 +740,331 @@ GBUFFEROutputType_Thin main(PIXELINPUT input)
 	surface.V /= dist;
 	surface.N = normalize(input.nor);
 
-	float3 T, B;
-	float3x3 TBN = compute_tangent_frame(surface.N, surface.P, UV, T, B);
+#if 0
+	float3x3 TBN = compute_tangent_frame(surface.N, surface.P, input.uvsets.xy);
+#else
+	float4 tangent = input.tan;
+	tangent.xyz = normalize(tangent.xyz);
+	float3 binormal = normalize(cross(tangent.xyz, surface.N) * tangent.w);
+	float3x3 TBN = float3x3(tangent.xyz, binormal, surface.N);
+#endif
+
 #endif // SIMPLE_INPUT
 
 #ifdef POM
-	ParallaxOcclusionMapping(UV, surface.V, TBN);
+	ParallaxOcclusionMapping(input.uvsets, surface.V, TBN);
 #endif // POM
 
-	float4 color = g_xMat_baseColor * float4(input.instanceColor, 1) * xBaseColorMap.Sample(sampler_objectshader, UV);
-	color.rgb = DEGAMMA(color.rgb);
-	ALPHATEST(color.a);
+	float4 color;
+	[branch]
+	if (g_xMaterial.uvset_baseColorMap >= 0)
+	{
+		const float2 UV_baseColorMap = g_xMaterial.uvset_baseColorMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+		color = texture_basecolormap.Sample(sampler_objectshader, UV_baseColorMap);
+		color.rgb = DEGAMMA(color.rgb);
+	}
+	else
+	{
+		color = 1;
+	}
+	color *= input.color;
+
+#ifndef DISABLE_ALPHATEST
+	clip(color.a - g_xMaterial.alphaTest);
+#endif // DISABLE_ALPHATEST
 
 #ifndef SIMPLE_INPUT
-	float3 diffuse = 0;
-	float3 specular = 0;
-	float3 reflection = 0;
 	float3 bumpColor = 0;
-	float opacity = color.a;
 	float depth = input.pos.z;
-	float ao = 1;
 #ifndef ENVMAPRENDERING
-	float lineardepth = input.pos2D.w;
-	input.pos2D.xy /= input.pos2D.w;
+	float2 pos2D = ScreenCoord * 2 - 1;
+	pos2D.y *= -1;
 	input.pos2DPrev.xy /= input.pos2DPrev.w;
-	input.ReflectionMapSamplingPos.xy /= input.ReflectionMapSamplingPos.w;
 
-	float2 refUV = input.ReflectionMapSamplingPos.xy * float2(0.5f, -0.5f) + 0.5f;
-	float2 ScreenCoord = input.pos2D.xy * float2(0.5f, -0.5f) + 0.5f;
-	float2 velocity = ((input.pos2DPrev.xy - g_xFrame_TemporalAAJitterPrev) - (input.pos2D.xy - g_xFrame_TemporalAAJitter)) * float2(0.5f, -0.5f);
-	float2 ReprojectedScreenCoord = ScreenCoord + velocity;
+	const float2 velocity = ((input.pos2DPrev.xy - g_xFrame_TemporalAAJitterPrev) - (pos2D.xy - g_xFrame_TemporalAAJitter)) * float2(0.5f, -0.5f);
+	const float2 ReprojectedScreenCoord = ScreenCoord + velocity;
+
+#ifndef WATER
+	NormalMapping(input.uvsets, surface.P, surface.N, TBN, bumpColor);
+#endif // WATER
+
 #endif // ENVMAPRENDERING
 #endif // SIMPLE_INPUT
 
-	float roughness = g_xMat_roughness;
+	// Surface map:
+	float4 surface_occlusion_roughness_metallic_reflectance;
+	[branch]
+	if (g_xMaterial.uvset_surfaceMap >= 0)
+	{
+		const float2 UV_surfaceMap = g_xMaterial.uvset_surfaceMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+		surface_occlusion_roughness_metallic_reflectance = texture_surfacemap.Sample(sampler_objectshader, UV_surfaceMap);
+		if (!g_xMaterial.IsOcclusionEnabled_Primary())
+		{
+			surface_occlusion_roughness_metallic_reflectance.r = 1;
+		}
+		if (g_xMaterial.IsUsingSpecularGlossinessWorkflow())
+		{
+			ConvertToSpecularGlossiness(surface_occlusion_roughness_metallic_reflectance);
+		}
+	}
+	else
+	{
+		surface_occlusion_roughness_metallic_reflectance = 1;
+	}
+	surface_occlusion_roughness_metallic_reflectance *= float4(1, g_xMaterial.roughness, g_xMaterial.metalness, g_xMaterial.reflectance);
 
-#ifdef NORMALMAP
-	NormalMapping(UV, surface.P, surface.N, TBN, bumpColor, roughness);
-#endif // NORMALMAP
+	// Emissive map:
+	float4 emissiveColor = g_xMaterial.emissiveColor;
+	[branch]
+	if (emissiveColor.a > 0 && g_xMaterial.uvset_emissiveMap >= 0)
+	{
+		const float2 UV_emissiveMap = g_xMaterial.uvset_emissiveMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+		float4 emissiveMap = texture_emissivemap.Sample(sampler_objectshader, UV_emissiveMap);
+		emissiveMap.rgb = DEGAMMA(emissiveMap.rgb);
+		emissiveColor *= emissiveMap;
+	}
 
-	float4 surface_ref_met_emi_sss = xSurfaceMap.Sample(sampler_objectshader, UV);
+
+#ifdef TERRAIN
+	color = 0;
+	surface_occlusion_roughness_metallic_reflectance = 0;
+	emissiveColor = 0;
+	float4 blend_weights = input.color;
+	blend_weights /= blend_weights.x + blend_weights.y + blend_weights.z + blend_weights.w;
+	float4 sam;
+	float3 baseN = normalize(input.nor);
+	surface.N = 0;
+
+	[branch]
+	if (blend_weights.x > 0)
+	{
+		[branch]
+		if (g_xMaterial.uvset_baseColorMap >= 0)
+		{
+			float2 uv = g_xMaterial.uvset_baseColorMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_basecolormap.Sample(sampler_objectshader, uv);
+			sam.rgb = DEGAMMA(sam.rgb);
+		}
+		else
+		{
+			sam = 1;
+		}
+		color += sam * g_xMaterial.baseColor * blend_weights.x;
+
+		[branch]
+		if (g_xMaterial.uvset_surfaceMap >= 0)
+		{
+			float2 uv = g_xMaterial.uvset_surfaceMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_surfacemap.Sample(sampler_objectshader, uv);
+		}
+		else
+		{
+			sam = 1;
+		}
+		surface_occlusion_roughness_metallic_reflectance += sam * float4(1, g_xMaterial.roughness, g_xMaterial.metalness, g_xMaterial.reflectance) * blend_weights.x;
+
+		[branch]
+		if (g_xMaterial.normalMapStrength > 0 && g_xMaterial.uvset_normalMap >= 0)
+		{
+			float2 uv = g_xMaterial.uvset_normalMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam.rgb = texture_normalmap.Sample(sampler_objectshader, uv);
+			sam.rgb = sam.rgb * 2 - 1;
+			surface.N += lerp(baseN, mul(sam.rgb, TBN), g_xMaterial.normalMapStrength) * blend_weights.x;
+		}
+
+		[branch]
+		if (g_xMaterial.uvset_emissiveMap >= 0 && any(g_xMaterial.emissiveColor))
+		{
+			float2 uv = g_xMaterial.uvset_emissiveMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_emissivemap.Sample(sampler_objectshader, uv);
+			sam.rgb = DEGAMMA(sam.rgb);
+			emissiveColor += sam * g_xMaterial.emissiveColor * blend_weights.x;
+		}
+	}
+
+	[branch]
+	if (blend_weights.y > 0)
+	{
+		[branch]
+		if (g_xMaterial_blend1.uvset_baseColorMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend1.uvset_baseColorMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend1_basecolormap.Sample(sampler_objectshader, uv);
+			sam.rgb = DEGAMMA(sam.rgb);
+		}
+		else
+		{
+			sam = 1;
+		}
+		color += sam * g_xMaterial_blend1.baseColor * blend_weights.y;
+
+		[branch]
+		if (g_xMaterial_blend1.uvset_surfaceMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend1.uvset_surfaceMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend1_surfacemap.Sample(sampler_objectshader, uv);
+		}
+		else
+		{
+			sam = 1;
+		}
+		surface_occlusion_roughness_metallic_reflectance += sam * float4(1, g_xMaterial_blend1.roughness, g_xMaterial_blend1.metalness, g_xMaterial_blend1.reflectance) * blend_weights.y;
+
+		[branch]
+		if (g_xMaterial_blend1.normalMapStrength > 0 && g_xMaterial_blend1.uvset_normalMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend1.uvset_normalMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam.rgb = texture_blend1_normalmap.Sample(sampler_objectshader, uv);
+			sam.rgb = sam.rgb * 2 - 1;
+			surface.N += lerp(baseN, mul(sam.rgb, TBN), g_xMaterial_blend1.normalMapStrength) * blend_weights.y;
+		}
+
+		[branch]
+		if (g_xMaterial_blend1.uvset_emissiveMap >= 0 && any(g_xMaterial_blend1.emissiveColor))
+		{
+			float2 uv = g_xMaterial_blend1.uvset_emissiveMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend1_emissivemap.Sample(sampler_objectshader, uv);
+			sam.rgb = DEGAMMA(sam.rgb);
+			emissiveColor += sam * g_xMaterial_blend1.emissiveColor * blend_weights.y;
+		}
+	}
+
+	[branch]
+	if (blend_weights.z > 0)
+	{
+		[branch]
+		if (g_xMaterial_blend2.uvset_baseColorMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend2.uvset_baseColorMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend2_basecolormap.Sample(sampler_objectshader, uv);
+			sam.rgb = DEGAMMA(sam.rgb);
+		}
+		else
+		{
+			sam = 1;
+		}
+		color += sam * g_xMaterial_blend2.baseColor * blend_weights.z;
+
+		[branch]
+		if (g_xMaterial_blend2.uvset_surfaceMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend2.uvset_surfaceMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend2_surfacemap.Sample(sampler_objectshader, uv);
+		}
+		else
+		{
+			sam = 1;
+		}
+		surface_occlusion_roughness_metallic_reflectance += sam * float4(1, g_xMaterial_blend2.roughness, g_xMaterial_blend2.metalness, g_xMaterial_blend2.reflectance) * blend_weights.z;
+
+		[branch]
+		if (g_xMaterial_blend2.normalMapStrength > 0 && g_xMaterial_blend2.uvset_normalMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend2.uvset_normalMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam.rgb = texture_blend2_normalmap.Sample(sampler_objectshader, uv);
+			sam.rgb = sam.rgb * 2 - 1;
+			surface.N += lerp(baseN, mul(sam.rgb, TBN), g_xMaterial_blend2.normalMapStrength) * blend_weights.z;
+		}
+
+		[branch]
+		if (g_xMaterial_blend2.uvset_emissiveMap >= 0 && any(g_xMaterial_blend2.emissiveColor))
+		{
+			float2 uv = g_xMaterial_blend2.uvset_emissiveMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend2_emissivemap.Sample(sampler_objectshader, uv);
+			sam.rgb = DEGAMMA(sam.rgb);
+			emissiveColor += sam * g_xMaterial_blend2.emissiveColor * blend_weights.z;
+		}
+	}
+
+	[branch]
+	if (blend_weights.w > 0)
+	{
+		[branch]
+		if (g_xMaterial_blend3.uvset_baseColorMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend3.uvset_baseColorMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend3_basecolormap.Sample(sampler_objectshader, uv);
+			sam.rgb = DEGAMMA(sam.rgb);
+		}
+		else
+		{
+			sam = 1;
+		}
+		color += sam * g_xMaterial_blend3.baseColor * blend_weights.w;
+
+		[branch]
+		if (g_xMaterial_blend3.uvset_surfaceMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend3.uvset_surfaceMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend3_surfacemap.Sample(sampler_objectshader, uv);
+		}
+		else
+		{
+			sam = 1;
+		}
+		surface_occlusion_roughness_metallic_reflectance += sam * float4(1, g_xMaterial_blend3.roughness, g_xMaterial_blend3.metalness, g_xMaterial_blend3.reflectance) * blend_weights.w;
+
+		[branch]
+		if (g_xMaterial_blend3.normalMapStrength > 0 && g_xMaterial_blend3.uvset_normalMap >= 0)
+		{
+			float2 uv = g_xMaterial_blend3.uvset_normalMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam.rgb = texture_blend3_normalmap.Sample(sampler_objectshader, uv);
+			sam.rgb = sam.rgb * 2 - 1;
+			surface.N += lerp(baseN, mul(sam.rgb, TBN), g_xMaterial_blend3.normalMapStrength) * blend_weights.w;
+		}
+
+		[branch]
+		if (g_xMaterial_blend3.uvset_emissiveMap >= 0 && any(g_xMaterial_blend3.emissiveColor))
+		{
+			float2 uv = g_xMaterial_blend3.uvset_emissiveMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+			sam = texture_blend3_emissivemap.Sample(sampler_objectshader, uv);
+			sam.rgb = DEGAMMA(sam.rgb);
+			emissiveColor += sam * g_xMaterial_blend3.emissiveColor * blend_weights.w;
+		}
+	}
+
+	color.a = 1;
+	surface.N = normalize(surface.N);
+
+#endif // TERRAIN
+
+	// Secondary occlusion map:
+	[branch]
+	if (g_xMaterial.IsOcclusionEnabled_Secondary() && g_xMaterial.uvset_occlusionMap >= 0)
+	{
+		const float2 UV_occlusionMap = g_xMaterial.uvset_occlusionMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+		surface_occlusion_roughness_metallic_reflectance.r *= texture_occlusionmap.Sample(sampler_objectshader, UV_occlusionMap).r;
+	}
+
+#ifndef SIMPLE_INPUT
+#ifndef ENVMAPRENDERING
+#ifndef TRANSPARENT
+	surface_occlusion_roughness_metallic_reflectance.r *= texture_ao.SampleLevel(sampler_linear_clamp, ScreenCoord, 0).r;
+#endif // TRANSPARENT
+#endif // ENVMAPRENDERING
+#endif // SIMPLE_INPUT
 
 	surface = CreateSurface(
-		surface.P, surface.N, surface.V, color, roughness,
-		g_xMat_reflectance * surface_ref_met_emi_sss.r,
-		g_xMat_metalness * surface_ref_met_emi_sss.g,
-		g_xMat_emissive * surface_ref_met_emi_sss.b,
-		g_xMat_subsurfaceScattering * surface_ref_met_emi_sss.a
+		surface.P, 
+		surface.N, 
+		surface.V, 
+		color,
+		surface_occlusion_roughness_metallic_reflectance.g,
+		surface_occlusion_roughness_metallic_reflectance.r,
+		surface_occlusion_roughness_metallic_reflectance.b,
+		surface_occlusion_roughness_metallic_reflectance.a,
+		emissiveColor
+#ifdef BRDF_ANISOTROPIC
+		, g_xMaterial.parallaxOcclusionMapping,
+		tangent.xyz,
+		normalize(cross(tangent.xyz, surface.N) * tangent.w) // Compute bitangent again after normal mapping
+#endif // BRDF_ANISOTROPIC
 	);
 
+	surface.pixel = pixel;
+	surface.screenUV = ScreenCoord;
+
+	Lighting lighting = CreateLighting(0, 0, GetAmbient(surface.N), 0);
 
 #ifndef SIMPLE_INPUT
 
@@ -550,86 +1076,91 @@ GBUFFEROutputType_Thin main(PIXELINPUT input)
 	float2 bumpColor0 = 0;
 	float2 bumpColor1 = 0;
 	float2 bumpColor2 = 0;
-	bumpColor0 = 2.0f * xNormalMap.Sample(sampler_objectshader, UV - g_xMat_texMulAdd.ww).rg - 1.0f;
-	bumpColor1 = 2.0f * xNormalMap.Sample(sampler_objectshader, UV + g_xMat_texMulAdd.zw).rg - 1.0f;
-	bumpColor2 = xWaterRipples.Sample(sampler_objectshader, ScreenCoord).rg;
-	bumpColor = float3(bumpColor0 + bumpColor1 + bumpColor2, 1)  * g_xMat_refractionIndex;
-	surface.N = normalize(lerp(surface.N, mul(normalize(bumpColor), TBN), g_xMat_normalMapStrength));
-	bumpColor *= g_xMat_normalMapStrength;
+	[branch]
+	if (g_xMaterial.uvset_normalMap >= 0)
+	{
+		const float2 UV_normalMap = g_xMaterial.uvset_normalMap == 0 ? input.uvsets.xy : input.uvsets.zw;
+		bumpColor0 = 2.0f * texture_normalmap.Sample(sampler_objectshader, UV_normalMap - g_xMaterial.texMulAdd.ww).rg - 1.0f;
+		bumpColor1 = 2.0f * texture_normalmap.Sample(sampler_objectshader, UV_normalMap + g_xMaterial.texMulAdd.zw).rg - 1.0f;
+	}
+	bumpColor2 = texture_waterriples.SampleLevel(sampler_objectshader, ScreenCoord, 0).rg;
+	bumpColor = float3(bumpColor0 + bumpColor1 + bumpColor2, 1)  * g_xMaterial.refractionIndex;
+	surface.N = normalize(lerp(surface.N, mul(normalize(bumpColor), TBN), g_xMaterial.normalMapStrength));
+	bumpColor *= g_xMaterial.normalMapStrength;
 
 	//REFLECTION
-	float4 reflectiveColor = xReflection.SampleLevel(sampler_linear_mirror, refUV + bumpColor.rg, 0);
-
-
-	//REFRACTION 
-	float2 perturbatedRefrTexCoords = ScreenCoord.xy + bumpColor.rg;
-	float refDepth = texture_lineardepth.Sample(sampler_linear_mirror, ScreenCoord) * g_xFrame_MainCamera_ZFarP;
-	float3 refractiveColor = xRefraction.SampleLevel(sampler_linear_mirror, perturbatedRefrTexCoords, 0).rgb;
-	float mod = saturate(0.05*(refDepth - lineardepth));
-	refractiveColor = lerp(refractiveColor, surface.baseColor.rgb, mod).rgb;
-
-	//FRESNEL TERM
-	float3 fresnelTerm = F_Fresnel(surface.f0, surface.NdotV);
-	surface.albedo.rgb = lerp(refractiveColor, reflectiveColor.rgb, fresnelTerm);
+	float4 reflectionUV = mul(g_xCamera_ReflVP, float4(surface.P, 1));
+	reflectionUV.xy /= reflectionUV.w;
+	reflectionUV.xy = reflectionUV.xy * float2(0.5f, -0.5f) + 0.5f;
+	lighting.indirect.specular += texture_reflection.SampleLevel(sampler_linear_mirror, reflectionUV.xy + bumpColor.rg, 0).rgb;
 #endif // WATER
 
 
 
-	SpecularAA(surface.N, surface.roughness);
+	LightMapping(input.atl, lighting);
 
-#ifndef DEFERRED
+	ApplyEmissive(surface, lighting);
+
+#ifdef PLANARREFLECTION
+	lighting.indirect.specular += PlanarReflection(surface, bumpColor.rg);
+#endif
+
+
+
 
 #ifdef FORWARD
-	ForwardLighting(surface, diffuse, specular, reflection);
+	ForwardLighting(surface, lighting);
 #endif // FORWARD
 
 #ifdef TILEDFORWARD
-	TiledLighting(pixel, surface, diffuse, specular, reflection);
+	TiledLighting(surface, lighting);
 #endif // TILEDFORWARD
 
 
 #ifndef WATER
 #ifndef ENVMAPRENDERING
-
-	VoxelGI(surface, diffuse, reflection, ao);
-
-#ifdef PLANARREFLECTION
-	reflection = PlanarReflection(refUV, surface);
-#endif
-
-
 #ifdef TRANSPARENT
-	Refraction(ScreenCoord, input.nor2D, bumpColor, surface, color);
-	diffuse = lerp(1, diffuse, opacity);
+	Refraction(ScreenCoord, surface, color, lighting);
 #else
-	float4 ssr = xSSR.SampleLevel(sampler_linear_clamp, ReprojectedScreenCoord, 0);
-	reflection = lerp(reflection, ssr.rgb, ssr.a);
-	float ssao = xSSAO.SampleLevel(sampler_linear_clamp, ReprojectedScreenCoord, 0).r;
-	ao *= ssao;
+	float4 ssr = texture_ssr.SampleLevel(sampler_linear_clamp, ReprojectedScreenCoord, 0);
+	lighting.indirect.specular = lerp(lighting.indirect.specular, ssr.rgb, ssr.a);
 #endif // TRANSPARENT
-
-
 #endif // ENVMAPRENDERING
 #endif // WATER
 
-	specular += reflection * surface.F;
-
-	ApplyLighting(surface, diffuse, specular, ao, color);
-
 #ifdef WATER
-	// SOFT EDGE
-	float fade = saturate(0.3 * abs(refDepth - lineardepth));
-	color.a *= fade;
+	// WATER REFRACTION
+	float lineardepth = input.pos.w;
+	float sampled_lineardepth = texture_lineardepth.SampleLevel(sampler_point_clamp, ScreenCoord.xy + bumpColor.rg, 0) * g_xCamera_ZFarP;
+	float depth_difference = sampled_lineardepth - lineardepth;
+	surface.refraction.rgb = texture_refraction.SampleLevel(sampler_linear_mirror, ScreenCoord.xy + bumpColor.rg * saturate(0.5 * depth_difference), 0).rgb;
+	if (depth_difference < 0)
+	{
+		// Fix cutoff by taking unperturbed depth diff to fill the holes with fog:
+		sampled_lineardepth = texture_lineardepth.SampleLevel(sampler_point_clamp, ScreenCoord.xy, 0) * g_xCamera_ZFarP;
+		depth_difference = sampled_lineardepth - lineardepth;
+	}
+	// WATER FOG:
+	surface.refraction.a = 1 - saturate(surface.baseColor.a * 0.1f * depth_difference);
 #endif // WATER
+
+#ifdef UNLIT
+	lighting.direct.diffuse = 1;
+	lighting.indirect.diffuse = 0;
+	lighting.direct.specular = 0;
+	lighting.indirect.specular = 0;
+#endif // UNLIT
+
+	ApplyLighting(surface, lighting, color);
 
 	ApplyFog(dist, color);
 
 
-#endif // DEFERRED
+#endif // SIMPLE_INPUT
 
 
 #ifdef TEXTUREONLY
-	color.rgb += color.rgb * GetEmissive(surface.emissive);
+	color.rgb += surface.emissiveColor.rgb * surface.emissiveColor.a;
 #endif // TEXTUREONLY
 
 
@@ -637,21 +1168,17 @@ GBUFFEROutputType_Thin main(PIXELINPUT input)
 	color = float4(0, 0, 0, 1);
 #endif
 
-#endif // SIMPLE_INPUT
-
 	color = max(0, color);
 
 
 	// end point:
-#if defined(TRANSPARENT) || defined(TEXTUREONLY) || defined(ENVMAPRENDERING)
-	return color;
+#ifndef ALPHATESTONLY
+#ifdef OUTPUT_GBUFFER
+	return CreateGbuffer(surface, velocity, lighting);
 #else
-#if defined(DEFERRED)	
-	return CreateGbuffer(color, surface, velocity);
-#elif defined(FORWARD) || defined(TILEDFORWARD)
-	return CreateGbuffer_Thin(color, surface, velocity);
-#endif // DEFERRED
-#endif // TRANSPARENT
+	return color;
+#endif // OUTPUT_GBUFFER
+#endif // ALPHATESTONLY
 
 }
 
@@ -660,5 +1187,5 @@ GBUFFEROutputType_Thin main(PIXELINPUT input)
 
 
 
-#endif // _OBJECTSHADER_HF_
+#endif // WI_OBJECTSHADER_HF
 

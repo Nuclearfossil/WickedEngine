@@ -1,19 +1,11 @@
 #include "globals.hlsli"
 #include "cullingShaderHF.hlsli"
 
-CBUFFER(DispatchParams, CBSLOT_RENDERER_DISPATCHPARAMS)
-{
-	uint3	xDispatchParams_numThreadGroups;
-	uint	xDispatchParams_value0;
-	uint3	xDispatchParams_numThreads;
-	uint	xDispatchParams_value1;
-}
-
 // View space frustums for the grid cells.
-RWSTRUCTUREDBUFFER(out_Frustums, Frustum, UAVSLOT_TILEFRUSTUMS);
+RWSTRUCTUREDBUFFER(out_Frustums, Frustum, 0);
 
 [numthreads(TILED_CULLING_BLOCKSIZE, TILED_CULLING_BLOCKSIZE, 1)]
-void main(ComputeShaderInput IN)
+void main(uint3 DTid : SV_DispatchThreadID)
 {
 	// View space eye position is always at the origin.
 	const float3 eyePos = float3(0, 0, 0);
@@ -22,13 +14,13 @@ void main(ComputeShaderInput IN)
 	// frustum vertices.
 	float4 screenSpace[4];
 	// Top left point
-	screenSpace[0] = float4(IN.dispatchThreadID.xy * TILED_CULLING_BLOCKSIZE, 1.0f, 1.0f);
+	screenSpace[0] = float4(DTid.xy * TILED_CULLING_BLOCKSIZE, 1.0f, 1.0f);
 	// Top right point
-	screenSpace[1] = float4(float2(IN.dispatchThreadID.x + 1, IN.dispatchThreadID.y) * TILED_CULLING_BLOCKSIZE, 1.0f, 1.0f);
+	screenSpace[1] = float4(float2(DTid.x + 1, DTid.y) * TILED_CULLING_BLOCKSIZE, 1.0f, 1.0f);
 	// Bottom left point
-	screenSpace[2] = float4(float2(IN.dispatchThreadID.x, IN.dispatchThreadID.y + 1) * TILED_CULLING_BLOCKSIZE, 1.0f, 1.0f);
+	screenSpace[2] = float4(float2(DTid.x, DTid.y + 1) * TILED_CULLING_BLOCKSIZE, 1.0f, 1.0f);
 	// Bottom right point
-	screenSpace[3] = float4(float2(IN.dispatchThreadID.x + 1, IN.dispatchThreadID.y + 1) * TILED_CULLING_BLOCKSIZE, 1.0f, 1.0f);
+	screenSpace[3] = float4(float2(DTid.x + 1, DTid.y + 1) * TILED_CULLING_BLOCKSIZE, 1.0f, 1.0f);
 
 	float3 viewSpace[4];
 	// Now convert the screen space points to view space
@@ -50,8 +42,8 @@ void main(ComputeShaderInput IN)
 	frustum.planes[3] = ComputePlane(viewSpace[3], eyePos, viewSpace[2]);
 
 	// Store the computed frustum in global memory (if our thread ID is in bounds of the grid).
-	if (IN.dispatchThreadID.x < xDispatchParams_numThreads.x && IN.dispatchThreadID.y < xDispatchParams_numThreads.y)
+	if (DTid.x < g_xFrame_EntityCullingTileCount.x && DTid.y < g_xFrame_EntityCullingTileCount.y)
 	{
-		out_Frustums[flatten2D(IN.dispatchThreadID.xy, xDispatchParams_numThreads.xy)] = frustum;
+		out_Frustums[flatten2D(DTid.xy, g_xFrame_EntityCullingTileCount.xy)] = frustum;
 	}
 }

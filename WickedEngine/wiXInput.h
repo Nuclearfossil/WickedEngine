@@ -1,35 +1,19 @@
 #pragma once
 #include "CommonInclude.h"
-#include <Xinput.h>
+#include "wiInput.h"
 
-
-#pragma comment(lib,"xinput.lib")
-
-
-#define MAX_CONTROLLERS 4  // XInput handles up to 4 controllers 
-#define INPUT_DEADZONE  ( 0.24f * FLOAT(0x7FFF) )  // Default to 24% of the +/- 32767 range.   This is a reasonable default value but can be altered if needed.
-
-class wiXInput
+namespace wiXInput
 {
-private:
+	// Call once per frame to read and update controller states
+	void Update();
 
-	struct CONTROLLER_STATE
-	{
-		XINPUT_STATE state;
-		bool bConnected;
-	};
+	// Returns how many gamepads can Xinput handle
+	int GetMaxControllerCount();
 
-public:
-	wiXInput();
-	~wiXInput();
-	HRESULT UpdateControllerState();
-	DWORD	GetButtons(SHORT);
-	DWORD	GetDirections(short);
-	bool	isButtonDown(short,DWORD);
-	void	CleanUp();
+	// Returns whether the controller identified by index parameter is available or not.
+	//	Id state parameter is not nullptr, and the controller is available, the state will be written into it
+	bool GetControllerState(wiInput::ControllerState* state, int index);
 
-	CONTROLLER_STATE		controllers[MAX_CONTROLLERS];
-	WCHAR					g_szMessage[4][1024];
-	bool					g_bDeadZoneOn;
-};
-
+	// Sends feedback data for the controller identified by index parameter to output
+	void SetControllerFeedback(const wiInput::ControllerFeedback& data, int index);
+}

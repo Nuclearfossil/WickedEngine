@@ -28,6 +28,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // TODO: Place code here.
 
+    BOOL dpi_success = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    assert(dpi_success);
+
 	wiStartupArguments::Parse(lpCmdLine); // if you wish to use command line arguments, here is a good place to parse them...
 
     // Initialize global strings
@@ -43,11 +46,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_TEMPLATEWINDOWS));
 
-	wiRenderer::SHADERPATH = "../WickedEngine/shaders/"; // search for shaders elsewhere
-	wiFont::FONTPATH = "../WickedEngine/fonts/"; // search for fonts elsewhere
-	main.Initialize(); // initialize engine systems (mandatory)
-	main.infoDisplay.active = true; // just show some basic info...
-
+	// just show some basic info:
+	main.infoDisplay.active = true;
+	main.infoDisplay.watermark = true;
+	main.infoDisplay.resolution = true;
+	main.infoDisplay.fpsinfo = true;
 
 	MSG msg = { 0 };
 	while (msg.message != WM_QUIT)
@@ -120,7 +123,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    UpdateWindow(hWnd);
 
 
-   main.SetWindow(hWnd, hInst); // assign window handle (mandatory)
+   main.SetWindow(hWnd); // assign window handle (mandatory)
 
 
    return TRUE;
@@ -157,32 +160,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
         break;
-	case WM_KEYDOWN:
-		switch (wParam)
-		{
-		case VK_HOME:
-			wiBackLog::Toggle();
-			break;
-		case VK_UP:
-			if (wiBackLog::isActive())
-				wiBackLog::historyPrev();
-			break;
-		case VK_DOWN:
-			if (wiBackLog::isActive())
-				wiBackLog::historyNext();
-			break;
-		case VK_NEXT:
-			if (wiBackLog::isActive())
-				wiBackLog::Scroll(10);
-			break;
-		case VK_PRIOR:
-			if (wiBackLog::isActive())
-				wiBackLog::Scroll(-10);
-			break;
-		default:
-			break;
-		}
-		break;
+    case WM_SIZE:
+        wiEvent::FireEvent(SYSTEM_EVENT_CHANGE_RESOLUTION, lParam);
+        break;
+    case WM_DPICHANGED:
+        wiEvent::FireEvent(SYSTEM_EVENT_CHANGE_DPI, wParam);
+        break;
 	case WM_CHAR:
 		switch (wParam)
 		{
@@ -192,8 +175,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			wiTextInputField::DeleteFromInput();
 			break;
 		case VK_RETURN:
-			if (wiBackLog::isActive())
-				wiBackLog::acceptInput();
 			break;
 		default:
 		{

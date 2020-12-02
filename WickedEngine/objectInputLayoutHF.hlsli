@@ -1,65 +1,79 @@
-#ifndef _MESH_INPUT_LAYOUT_HF_
-#define _MESH_INPUT_LAYOUT_HF_
+#ifndef WI_MESH_INPUT_LAYOUT_HF
+#define WI_MESH_INPUT_LAYOUT_HF
+#include "globals.hlsli"
+#include "ShaderInterop_Renderer.h"
 
 struct Input_Instance
 {
-	float4 wi0 : MATI0;
-	float4 wi1 : MATI1;
-	float4 wi2 : MATI2;
-	float4 color_dither : COLOR_DITHER;
+	float4 mat0 : INSTANCEMATRIX0;
+	float4 mat1 : INSTANCEMATRIX1;
+	float4 mat2 : INSTANCEMATRIX2;
+	uint4 userdata : INSTANCEUSERDATA;
 };
 struct Input_InstancePrev
 {
-	float4 wiPrev0 : MATIPREV0;
-	float4 wiPrev1 : MATIPREV1;
-	float4 wiPrev2 : MATIPREV2;
+	float4 matPrev0 : INSTANCEMATRIXPREV0;
+	float4 matPrev1 : INSTANCEMATRIXPREV1;
+	float4 matPrev2 : INSTANCEMATRIXPREV2;
+};
+struct Input_InstanceAtlas
+{
+	float4 atlasMulAdd : INSTANCEATLAS;
 };
 
 struct Input_Object_POS
 {
 	float4 pos : POSITION_NORMAL_WIND;
-	Input_Instance instance;
+	Input_Instance inst;
 };
 struct Input_Object_POS_TEX
 {
 	float4 pos : POSITION_NORMAL_WIND;
-	float2 tex : TEXCOORD0;
-	Input_Instance instance;
+	float2 uv0 : UVSET0;
+	float2 uv1 : UVSET1;
+	Input_Instance inst;
 };
 struct Input_Object_ALL
 {
 	float4 pos : POSITION_NORMAL_WIND;
-	float2 tex : TEXCOORD0;
-	float4 pre : TEXCOORD1;
-	Input_Instance instance;
-	Input_InstancePrev instancePrev;
+	float2 uv0 : UVSET0;
+	float2 uv1 : UVSET1;
+	float2 atl : ATLAS;
+	float4 col : COLOR;
+	float4 tan : TANGENT;
+	float4 pre : PREVPOS;
+	Input_Instance inst;
+	Input_InstancePrev instPrev;
+	Input_InstanceAtlas instAtlas;
 };
 
 inline float4x4 MakeWorldMatrixFromInstance(in Input_Instance input)
 {
 	return float4x4(
-		  float4(input.wi0.x, input.wi1.x, input.wi2.x, 0)
-		, float4(input.wi0.y, input.wi1.y, input.wi2.y, 0)
-		, float4(input.wi0.z, input.wi1.z, input.wi2.z, 0)
-		, float4(input.wi0.w, input.wi1.w, input.wi2.w, 1)
-		);
+		input.mat0, 
+		input.mat1, 
+		input.mat2, 
+		float4(0, 0, 0, 1)
+	);
 }
 inline float4x4 MakeWorldMatrixFromInstance(in Input_InstancePrev input)
 {
 	return float4x4(
-		  float4(input.wiPrev0.x, input.wiPrev1.x, input.wiPrev2.x, 0)
-		, float4(input.wiPrev0.y, input.wiPrev1.y, input.wiPrev2.y, 0)
-		, float4(input.wiPrev0.z, input.wiPrev1.z, input.wiPrev2.z, 0)
-		, float4(input.wiPrev0.w, input.wiPrev1.w, input.wiPrev2.w, 1)
+		input.matPrev0,
+		input.matPrev1,
+		input.matPrev2,
+		float4(0, 0, 0, 1)
 		);
 }
 
 struct VertexSurface
 {
 	float4 position;
+	float4 uvsets;
+	float2 atlas;
+	float4 color;
 	float3 normal;
-	float wind;
-	float2 uv;
+	float4 tangent;
 	float4 prevPos;
 };
 inline VertexSurface MakeVertexSurfaceFromInput(Input_Object_POS input)
@@ -68,11 +82,23 @@ inline VertexSurface MakeVertexSurfaceFromInput(Input_Object_POS input)
 
 	surface.position = float4(input.pos.xyz, 1);
 
+	surface.color = g_xMaterial.baseColor * unpack_rgba(input.inst.userdata.x);
+
 	uint normal_wind = asuint(input.pos.w);
-	surface.normal.x = (float)((normal_wind >> 0) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.normal.y = (float)((normal_wind >> 8) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.normal.z = (float)((normal_wind >> 16) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.wind = (float)((normal_wind >> 24) & 0x000000FF) / 255.0f;
+	surface.normal.x = (float)((normal_wind >> 0) & 0xFF) / 255.0f * 2.0f - 1.0f;
+	surface.normal.y = (float)((normal_wind >> 8) & 0xFF) / 255.0f * 2.0f - 1.0f;
+	surface.normal.z = (float)((normal_wind >> 16) & 0xFF) / 255.0f * 2.0f - 1.0f;
+
+	if (g_xMaterial.IsUsingWind())
+	{
+		const float windweight = ((normal_wind >> 24) & 0xFF) / 255.0f;
+		const float waveoffset = dot(surface.position.xyz, g_xFrame_WindDirection) * g_xFrame_WindWaveSize + (surface.position.x + surface.position.y + surface.position.z) * g_xFrame_WindRandomness;
+		const float3 wavedir = g_xFrame_WindDirection * windweight;
+		const float3 wind = sin(g_xFrame_Time * g_xFrame_WindSpeed + waveoffset) * wavedir;
+		const float3 windPrev = sin(g_xFrame_TimePrev * g_xFrame_WindSpeed + waveoffset) * wavedir;
+		surface.position.xyz += wind;
+		surface.prevPos.xyz += windPrev;
+	}
 
 	return surface;
 }
@@ -82,13 +108,25 @@ inline VertexSurface MakeVertexSurfaceFromInput(Input_Object_POS_TEX input)
 
 	surface.position = float4(input.pos.xyz, 1);
 
-	uint normal_wind = asuint(input.pos.w);
-	surface.normal.x = (float)((normal_wind >> 0) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.normal.y = (float)((normal_wind >> 8) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.normal.z = (float)((normal_wind >> 16) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.wind = (float)((normal_wind >> 24) & 0x000000FF) / 255.0f;
+	surface.color = g_xMaterial.baseColor * unpack_rgba(input.inst.userdata.x);
 
-	surface.uv = input.tex.xy;
+	uint normal_wind = asuint(input.pos.w);
+	surface.normal.x = (float)((normal_wind >> 0) & 0xFF) / 255.0f * 2.0f - 1.0f;
+	surface.normal.y = (float)((normal_wind >> 8) & 0xFF) / 255.0f * 2.0f - 1.0f;
+	surface.normal.z = (float)((normal_wind >> 16) & 0xFF) / 255.0f * 2.0f - 1.0f;
+
+	if (g_xMaterial.IsUsingWind())
+	{
+		const float windweight = ((normal_wind >> 24) & 0xFF) / 255.0f;
+		const float waveoffset = dot(surface.position.xyz, g_xFrame_WindDirection) * g_xFrame_WindWaveSize + (surface.position.x + surface.position.y + surface.position.z) * g_xFrame_WindRandomness;
+		const float3 wavedir = g_xFrame_WindDirection * windweight;
+		const float3 wind = sin(g_xFrame_Time * g_xFrame_WindSpeed + waveoffset) * wavedir;
+		const float3 windPrev = sin(g_xFrame_TimePrev * g_xFrame_WindSpeed + waveoffset) * wavedir;
+		surface.position.xyz += wind;
+		surface.prevPos.xyz += windPrev;
+	}
+
+	surface.uvsets = float4(input.uv0 * g_xMaterial.texMulAdd.xy + g_xMaterial.texMulAdd.zw, input.uv1);
 
 	return surface;
 }
@@ -98,17 +136,38 @@ inline VertexSurface MakeVertexSurfaceFromInput(Input_Object_ALL input)
 
 	surface.position = float4(input.pos.xyz, 1);
 
-	uint normal_wind = asuint(input.pos.w);
-	surface.normal.x = (float)((normal_wind >> 0) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.normal.y = (float)((normal_wind >> 8) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.normal.z = (float)((normal_wind >> 16) & 0x000000FF) / 255.0f * 2.0f - 1.0f;
-	surface.wind = (float)((normal_wind >> 24) & 0x000000FF) / 255.0f;
+	surface.color = g_xMaterial.baseColor * unpack_rgba(input.inst.userdata.x);
 
-	surface.uv = input.tex.xy;
+	if (g_xMaterial.IsUsingVertexColors())
+	{
+		surface.color *= input.col;
+	}
+
+	uint normal_wind = asuint(input.pos.w);
+	surface.normal.x = (float)((normal_wind >> 0) & 0xFF) / 255.0f * 2.0f - 1.0f;
+	surface.normal.y = (float)((normal_wind >> 8) & 0xFF) / 255.0f * 2.0f - 1.0f;
+	surface.normal.z = (float)((normal_wind >> 16) & 0xFF) / 255.0f * 2.0f - 1.0f;
+
+	surface.tangent = input.tan * 2 - 1;
+
+	if (g_xMaterial.IsUsingWind())
+	{
+		const float windweight = ((normal_wind >> 24) & 0xFF) / 255.0f;
+		const float waveoffset = dot(surface.position.xyz, g_xFrame_WindDirection) * g_xFrame_WindWaveSize + (surface.position.x + surface.position.y + surface.position.z) * g_xFrame_WindRandomness;
+		const float3 wavedir = g_xFrame_WindDirection * windweight;
+		const float3 wind = sin(g_xFrame_Time * g_xFrame_WindSpeed + waveoffset) * wavedir;
+		const float3 windPrev = sin(g_xFrame_TimePrev * g_xFrame_WindSpeed + waveoffset) * wavedir;
+		surface.position.xyz += wind;
+		surface.prevPos.xyz += windPrev;
+	}
+
+	surface.uvsets = float4(input.uv0 * g_xMaterial.texMulAdd.xy + g_xMaterial.texMulAdd.zw, input.uv1);
+
+	surface.atlas = input.atl * input.instAtlas.atlasMulAdd.xy + input.instAtlas.atlasMulAdd.zw;
 
 	surface.prevPos = float4(input.pre.xyz, 1);
 
 	return surface;
 }
 
-#endif // _MESH_INPUT_LAYOUT_HF_
+#endif // WI_MESH_INPUT_LAYOUT_HF

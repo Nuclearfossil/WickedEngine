@@ -7,9 +7,9 @@
 using namespace std;
 
 // this should always be only INCREMENTED and only if a new serialization is implemeted somewhere!
-uint64_t __archiveVersion = 20;
+uint64_t __archiveVersion = 53;
 // this is the version number of which below the archive is not compatible with the current version
-uint64_t __archiveVersionBarrier = 1;
+uint64_t __archiveVersionBarrier = 22;
 
 // version history is logged in ArchiveVersionHistory.txt file!
 
@@ -17,20 +17,15 @@ wiArchive::wiArchive()
 {
 	CreateEmpty();
 }
-wiArchive::wiArchive(const std::string& fileName, bool readMode):readMode(readMode),pos(0),DATA(nullptr),dataSize(0),fileName(fileName)
+wiArchive::wiArchive(const std::string& fileName, bool readMode) : fileName(fileName), readMode(readMode)
 {
 	if (!fileName.empty())
 	{
+		directory = wiHelper::GetDirectoryFromPath(fileName);
 		if (readMode)
 		{
-			ifstream file(fileName, ios::binary | ios::ate);
-			if (file.is_open())
+			if (wiHelper::FileRead(fileName, DATA))
 			{
-				dataSize = (size_t)file.tellg();
-				file.seekg(0, file.beg);
-				DATA = new char[(size_t)dataSize];
-				file.read(DATA, dataSize);
-				file.close();
 				(*this) >> version;
 				if (version < __archiveVersionBarrier)
 				{
@@ -56,20 +51,13 @@ wiArchive::wiArchive(const std::string& fileName, bool readMode):readMode(readMo
 	}
 }
 
-
-wiArchive::~wiArchive()
-{
-	Close();
-}
-
 void wiArchive::CreateEmpty()
 {
 	readMode = false;
 	pos = 0;
 
 	version = __archiveVersion;
-	dataSize = 128; // this will grow if necessary anyway...
-	DATA = new char[dataSize];
+	DATA.resize(128); // starting size
 	(*this) << version;
 }
 
@@ -91,7 +79,7 @@ void wiArchive::SetReadModeAndResetPos(bool isReadMode)
 bool wiArchive::IsOpen()
 {
 	// when it is open, DATA is not null because it contains the version number at least!
-	return DATA != nullptr;
+	return !DATA.empty();
 }
 
 void wiArchive::Close()
@@ -100,33 +88,20 @@ void wiArchive::Close()
 	{
 		SaveFile(fileName);
 	}
-	SAFE_DELETE_ARRAY(DATA);
+	DATA.clear();
 }
 
 bool wiArchive::SaveFile(const std::string& fileName)
 {
-	if (pos <= 0)
-	{
-		return false;
-	}
-
-	ofstream file(fileName, ios::binary | ios::trunc);
-	if (file.is_open())
-	{
-		file.write(DATA, (streamsize)pos);
-		file.close();
-		return true;
-	}
-
-	return false;
+	return wiHelper::FileWrite(fileName, DATA.data(), pos);
 }
 
-string wiArchive::GetSourceDirectory()
+const string& wiArchive::GetSourceDirectory() const
 {
-	return wiHelper::GetDirectoryFromPath(fileName);
+	return directory;
 }
 
-string wiArchive::GetSourceFileName()
+const string& wiArchive::GetSourceFileName() const
 {
 	return fileName;
 }

@@ -1,40 +1,33 @@
-#ifndef _ENVMAP_HF_
-#define _ENVMAP_HF_
+#ifndef WI_ENVMAP_HF
+#define WI_ENVMAP_HF
 
 #include "globals.hlsli"
-
-struct VSOut_EnvmapRendering
-{
-	float4 pos : SV_Position;
-	float3 nor : NORMAL;
-	float2 tex : TEXCOORD0;
-	nointerpolation float3 instanceColor	: INSTANCECOLOR;
-	float  ao : AMBIENT_OCCLUSION;
-};
 
 struct PSIn_EnvmapRendering
 {
 	float4 pos : SV_Position;
+	float4 color : COLOR;
+	float4 uvsets : UVSETS;
+	float2 atl : ATLAS;
+	float3 nor : NORMAL;
+	float4 tan : TANGENT;
 	float3 pos3D : WORLDPOSITION;
-	float3 nor : NORMAL;
-	float2 tex : TEXCOORD0;
-	float  ao : AMBIENT_OCCLUSION;
-	nointerpolation float3 instanceColor	: INSTANCECOLOR;
+#ifdef VPRT_EMULATION
+	uint RTIndex	: RTINDEX;
+#else
 	uint RTIndex	: SV_RenderTargetArrayIndex;
-};
-
-
-struct VSOut_Sky_EnvmapRendering
-{
-	float4 pos : SV_POSITION;
-	float3 nor : NORMAL;
+#endif // VPRT_EMULATION
 };
 
 struct PSIn_Sky_EnvmapRendering
 {
 	float4 pos : SV_POSITION;
 	float3 nor : NORMAL;
-	uint RTIndex : SV_RenderTargetArrayIndex;
+#ifdef VPRT_EMULATION
+	uint RTIndex	: RTINDEX;
+#else
+	uint RTIndex	: SV_RenderTargetArrayIndex;
+#endif // VPRT_EMULATION
 };
 
-#endif // _ENVMAP_HF_
+#endif // WI_ENVMAP_HF

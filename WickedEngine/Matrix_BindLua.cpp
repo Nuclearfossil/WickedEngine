@@ -63,10 +63,6 @@ Matrix_BindLua::Matrix_BindLua(lua_State* L)
 
 }
 
-Matrix_BindLua::~Matrix_BindLua()
-{
-}
-
 int Matrix_BindLua::GetRow(lua_State* L)
 {
 	int argc = wiLua::SGetArgCount(L);
@@ -309,7 +305,7 @@ void Matrix_BindLua::Bind()
 	if (!initialized)
 	{
 		initialized = true;
-		Luna<Matrix_BindLua>::Register(wiLua::GetGlobal()->GetLuaState());
-		wiLua::GetGlobal()->RunText("matrix = Matrix()");
+		Luna<Matrix_BindLua>::Register(wiLua::GetLuaState());
+		wiLua::RunText("matrix = Matrix()");
 	}
 }
